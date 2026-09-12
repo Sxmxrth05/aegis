@@ -138,6 +138,104 @@ a {
   pointer-events: none;
 }
 
+.globe-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  color: rgba(147, 197, 253, 0.78);
+}
+
+.globe-star-dust {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1px 1px at 8% 22%, rgba(219, 234, 254, 0.52) 0 52%, transparent 58%),
+    radial-gradient(1px 1px at 19% 67%, rgba(147, 197, 253, 0.36) 0 50%, transparent 58%),
+    radial-gradient(1px 1px at 38% 12%, rgba(255, 255, 255, 0.42) 0 50%, transparent 58%),
+    radial-gradient(1px 1px at 72% 18%, rgba(191, 219, 254, 0.4) 0 50%, transparent 58%),
+    radial-gradient(1px 1px at 87% 71%, rgba(147, 197, 253, 0.42) 0 50%, transparent 58%),
+    radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(10, 14, 23, 0.14) 100%);
+}
+
+.globe-hud__frame {
+  position: absolute;
+  inset: 14px;
+  width: calc(100% - 28px);
+  height: calc(100% - 28px);
+  fill: none;
+  stroke: rgba(96, 165, 250, 0.46);
+  stroke-width: 0.16;
+}
+
+.globe-hud__hairline {
+  stroke: rgba(148, 163, 184, 0.32);
+  stroke-width: 0.1;
+}
+
+.globe-hud__reticle {
+  position: absolute;
+  padding: 5px 7px;
+  background: rgba(10, 14, 23, 0.62);
+  border: 1px solid rgba(46, 55, 80, 0.66);
+}
+
+.globe-hud__reticle { right: 26px; bottom: 26px; color: rgba(156, 163, 184, 0.72); }
+
+.globe-hud__marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: transform 220ms linear;
+}
+
+.globe-hud__marker-dot {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border: 1px solid #bfdbfe;
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.95);
+}
+
+.globe-hud__marker-label {
+  display: block;
+  max-width: 105px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(219, 234, 254, 0.88);
+  text-shadow: 0 1px 8px #0a0e17;
+}
+
+.globe-hud__marker-label small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(148, 163, 184, 0.76);
+  font-size: 8px;
+}
+
+.globe-hud__marker--alert { color: #fecaca; }
+.globe-hud__marker--alert .globe-hud__marker-dot {
+  border-color: #fecaca;
+  background: #ff5b67;
+  box-shadow: 0 0 14px rgba(255, 91, 103, 1);
+  animation: globe-hud-pulse 1.55s ease-out infinite;
+}
+.globe-hud__marker--alert .globe-hud__marker-label { color: #fecaca; }
+
+@keyframes globe-hud-pulse {
+  60% { box-shadow: 0 0 4px rgba(255, 91, 103, 0.15); }
+  100% { box-shadow: 0 0 14px rgba(255, 91, 103, 0.9); }
+}
+
 @keyframes scan-beam {
   0%,
   12% {

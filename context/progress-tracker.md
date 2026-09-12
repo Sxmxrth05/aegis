@@ -278,6 +278,12 @@ _No checkpoint session has occurred yet._
 
 **2026-09-12 Dev D redesign update:** Conjunction Details, Negotiation Console, Resolution, and History now share the operations-ledger visual system. The chat-bubble transcript was replaced with an append-only fixed-column decision ledger; History now includes derived archive counters plus explicit loading, error, and empty states. Existing WebSocket, REST, and route behavior is unchanged. Typecheck/lint pass; headless Edge visual QA passed at 1440×1200.
 
+**2026-09-12 Dev D Globe enhancement:** Preserved the configurable `components/globe/Globe.tsx` invariant while adding a local bump texture, Fresnel atmosphere mesh, composer-owned Unreal bloom, pulsing conjunction rings, fading visual orbit arcs, and projected SVG/CSS HUD annotations. Monitor and Trajectory continue to use the same component. Typecheck/lint pass.
+
+**2026-09-12 Dev D starfield enhancement:** Added a local, deterministic two-depth Three.js star sphere plus a restrained CSS dust fallback behind the existing Globe canvas. It requires no remote asset or second renderer and remains subdued below the bloom threshold. Typecheck/lint pass.
+
+**2026-09-12 Dev D twilight pass:** Tuned the existing Globe’s `MeshPhongMaterial`, directional/ambient light, Fresnel rim, and bloom to retain night lights but make Earth relief legible without a full-scene blue wash. Typecheck/lint pass.
+
 **Completion criteria:**
 - [ ] Every screen above demoable against mock data before being wired live
 - [ ] All screens wired to live events by end of Phase 2

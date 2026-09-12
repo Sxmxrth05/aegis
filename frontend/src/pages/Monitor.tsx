@@ -31,7 +31,7 @@ export default function Monitor() {
   const activeCount = trackedObjects.length - hazardCount;
 
   return (
-    <main className="ops-grid relative min-h-[calc(100dvh-4rem)] overflow-hidden bg-background">
+    <main className="relative min-h-[calc(100dvh-4rem)] overflow-hidden bg-background">
       <div className="absolute inset-0">
         <Globe
           trackedObjects={trackedObjects}

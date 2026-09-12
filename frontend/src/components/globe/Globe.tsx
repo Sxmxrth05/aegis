@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactGlobe, { type GlobeMethods } from 'react-globe.gl';
-import earthNightTexture from '../../assets/earth-night.jpg';
+import { ACESFilmicToneMapping, AdditiveBlending, AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group, Mesh, MeshPhongMaterial, Points, PointsMaterial, ShaderMaterial, SphereGeometry, Vector2 } from 'three';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
+import earthBumpTexture from '../../assets/earth-bump.png';
+import earthNightTexture from '../../assets/earth-night.jpg';
 import { positionKmToGeo } from './eciToGeo';
-import type { ConjunctionAlert, TrackedObject, ManeuverTrajectoryResult } from './types';
+import { GlobeHud } from './GlobeHud';
+import type { ConjunctionAlert, ManeuverTrajectoryResult, TrackedObject } from './types';
 
 export type GlobeMode = 'live' | 'conjunction' | 'trajectory';
 
@@ -24,24 +28,111 @@ type GlobePoint = {
   isFlagged: boolean;
 };
 
-type GlobeRing = {
-  lat: number;
-  lng: number;
-};
+type OrbitTrail = GlobePoint & { endLat: number; endLng: number; endAlt: number };
 
-// Matches the accent/danger tokens in ui-tokens.md — same color language as
-// D3's Badge (accent = active, danger = hazard/debris).
-const ACCENT_COLOR = '#3b82f6';
-const DANGER_COLOR = '#ef4444';
+const ACCENT_COLOR = '#60a5fa';
+const DANGER_COLOR = '#ff5b67';
+
+const atmosphereVertex = `
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  void main() {
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDirection = normalize(-viewPosition.xyz);
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`;
+
+const atmosphereFragment = `
+  uniform vec3 glowColor;
+  uniform float intensity;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  void main() {
+    float fresnel = pow(1.0 - max(dot(vNormal, vViewDirection), 0.0), 3.1);
+    gl_FragColor = vec4(glowColor, fresnel * intensity);
+  }
+`;
+
+function createAtmosphere(radius: number) {
+  const material = new ShaderMaterial({
+    uniforms: { glowColor: { value: new Color('#6fa8ff') }, intensity: { value: 0.52 } },
+    vertexShader: atmosphereVertex,
+    fragmentShader: atmosphereFragment,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+  });
+  const mesh = new Mesh(new SphereGeometry(radius * 1.045, 96, 96), material);
+  mesh.name = 'aegis-fresnel-atmosphere';
+  return mesh;
+}
+
+function createStarLayer(radius: number, count: number, color: string, size: number, opacity: number, offset: number) {
+  const positions = new Float32Array(count * 3);
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+  for (let index = 0; index < count; index += 1) {
+    // Fibonacci-distributed points avoid the artificial clumps produced by a
+    // naive random cloud and make the sky deterministic across page loads.
+    const y = 1 - ((index + 0.5) / count) * 2;
+    const ring = Math.sqrt(1 - y * y);
+    const theta = index * goldenAngle + offset;
+    const distance = radius + ((index * 17) % 11) - 5;
+    positions[index * 3] = Math.cos(theta) * ring * distance;
+    positions[index * 3 + 1] = y * distance;
+    positions[index * 3 + 2] = Math.sin(theta) * ring * distance;
+  }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  const material = new PointsMaterial({
+    color,
+    size,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+  return new Points(geometry, material);
+}
+
+function createStarfield(radius: number) {
+  const starfield = new Group();
+  starfield.name = 'aegis-starfield';
+  starfield.add(
+    createStarLayer(radius * 7.5, 520, '#9fc9ff', 1.15, 0.46, 0.2),
+    createStarLayer(radius * 7.45, 56, '#f3e8c9', 2.15, 0.56, 1.6),
+  );
+  return starfield;
+}
+
+function disposeObject(object: Group | Mesh) {
+  object.traverse((child) => {
+    if (child instanceof Mesh || child instanceof Points) {
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) child.material.forEach((material) => material.dispose());
+      else child.material.dispose();
+    }
+  });
+}
 
 export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult, className = '' }: Props) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const bloomRef = useRef<UnrealBloomPass | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [hudMarkers, setHudMarkers] = useState<Array<GlobePoint & { x: number; y: number }>>([]);
+  const globeMaterial = useMemo(() => new MeshPhongMaterial({
+    color: '#bfd6f5',
+    emissive: '#071a36',
+    emissiveIntensity: 0.28,
+    specular: '#42689a',
+    shininess: 9,
+    bumpScale: 0.72,
+  }), []);
 
-  // react-globe.gl sizes itself off explicit width/height, not its parent —
-  // fill whatever container the caller gives it (full-bleed on Monitor, a
-  // smaller docked panel elsewhere) rather than requiring pixel props.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -52,71 +143,152 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     return () => observer.disconnect();
   }, []);
 
-  const flaggedIds = useMemo(() => {
-    if (!conjunctionAlert) return new Set<string>();
-    return new Set([conjunctionAlert.primary_id, conjunctionAlert.secondary_id]);
-  }, [conjunctionAlert]);
+  const flaggedIds = useMemo(() => conjunctionAlert ? new Set([conjunctionAlert.primary_id, conjunctionAlert.secondary_id]) : new Set<string>(), [conjunctionAlert]);
 
-  const points = useMemo<GlobePoint[]>(
-    () =>
-      trackedObjects.map((obj) => {
-        const geo = positionKmToGeo(obj.position_km, obj.timestamp_utc);
-        return {
-          norad_id: obj.norad_id,
-          name: obj.name,
-          ...geo,
-          isFlagged: flaggedIds.has(obj.norad_id),
-        };
-      }),
-    [trackedObjects, flaggedIds],
-  );
+  const points = useMemo<GlobePoint[]>(() => trackedObjects.map((obj) => ({
+    norad_id: obj.norad_id,
+    name: obj.name,
+    ...positionKmToGeo(obj.position_km, obj.timestamp_utc),
+    isFlagged: flaggedIds.has(obj.norad_id),
+  })), [trackedObjects, flaggedIds]);
 
-  // 'trajectory' mode currently renders the same as 'live' — before/after
-  // maneuver arcs depend on Dev A's Phase 2 propagation arrays, not yet
-  // available. The mode prop is wired now so Trajectory.tsx can reuse this
-  // same Globe instance later without a prop-shape change (invariant: one
-  // configurable Globe, not three).
-  const rings = useMemo<GlobeRing[]>(() => {
-    if (mode !== 'conjunction' || !conjunctionAlert) return [];
-    return points.filter((p) => p.isFlagged).map(({ lat, lng }) => ({ lat, lng }));
-  }, [mode, conjunctionAlert, points]);
+  const trails = useMemo<OrbitTrail[]>(() => points.map((point, index) => ({
+    ...point,
+    endLat: Math.max(-82, Math.min(82, point.lat + (index % 2 === 0 ? 8 : -8))),
+    endLng: point.lng - 34,
+    endAlt: point.alt,
+  })), [points]);
+
+  const rings = useMemo(() => mode === 'conjunction' && conjunctionAlert ? points.filter((point) => point.isFlagged) : [], [mode, conjunctionAlert, points]);
 
   const pathsData = useMemo(() => {
     if (mode !== 'trajectory' || !trajectoryResult) return [];
     const convert = (path: [number, number, number][]) => path.map(([lng, lat, alt]) => ({ lat, lng, alt }));
     return [
-      { coords: convert(trajectoryResult.nominal_path_primary), color: '#9ca3b8' }, // text-secondary
-      { coords: convert(trajectoryResult.nominal_path_secondary), color: '#9ca3b8' },
-      { coords: convert(trajectoryResult.maneuvered_path), color: '#3b82f6' } // accent
+      { coords: convert(trajectoryResult.nominal_path_primary), color: '#64748b' },
+      { coords: convert(trajectoryResult.nominal_path_secondary), color: '#64748b' },
+      { coords: convert(trajectoryResult.maneuvered_path), color: ACCENT_COLOR },
     ];
   }, [mode, trajectoryResult]);
 
+  const updateHud = useCallback(() => {
+    const globe = globeRef.current;
+    if (!globe) return;
+    setHudMarkers(points.map((point) => {
+      const screen = globe.getScreenCoords(point.lat, point.lng, point.alt);
+      return { ...point, x: screen.x, y: screen.y };
+    }).filter((point) => point.x >= 0 && point.y >= 0 && point.x <= size.width && point.y <= size.height));
+  }, [points, size]);
+
+  const configureScene = useCallback(() => {
+    const globe = globeRef.current;
+    if (!globe) return;
+    const scene = globe.scene();
+    const previousAtmosphere = scene.getObjectByName('aegis-fresnel-atmosphere') as Mesh | undefined;
+    const previousStarfield = scene.getObjectByName('aegis-starfield') as Group | undefined;
+    previousAtmosphere?.removeFromParent();
+    previousStarfield?.removeFromParent();
+    if (previousAtmosphere) disposeObject(previousAtmosphere);
+    if (previousStarfield) disposeObject(previousStarfield);
+    const atmosphere = createAtmosphere(globe.getGlobeRadius());
+    const starfield = createStarfield(globe.getGlobeRadius());
+    starfield.rotation.y = -0.42;
+    scene.add(atmosphere);
+    scene.add(starfield);
+
+    const renderer = globe.renderer();
+    renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.04;
+
+    const directional = globe.lights().find((light) => light instanceof DirectionalLight);
+    if (directional instanceof DirectionalLight) {
+      directional.position.set(1.3, 0.65, 1.5);
+      directional.intensity = 1.45;
+    }
+    let fillLight = scene.getObjectByName('aegis-twilight-fill') as AmbientLight | undefined;
+    if (!fillLight) {
+      fillLight = new AmbientLight('#89b6eb', 0.48);
+      fillLight.name = 'aegis-twilight-fill';
+      scene.add(fillLight);
+    }
+
+    const composer = globe.postProcessingComposer();
+    if (!bloomRef.current) {
+      bloomRef.current = new UnrealBloomPass(new Vector2(size.width || 1, size.height || 1), 0.82, 0.3, 0.8);
+      composer.addPass(bloomRef.current);
+    }
+    bloomRef.current.setSize(size.width || 1, size.height || 1);
+    updateHud();
+  }, [size, updateHud]);
+
+  useEffect(() => {
+    const timer = window.setInterval(updateHud, 280);
+    return () => window.clearInterval(timer);
+  }, [updateHud]);
+
+  useEffect(() => () => {
+    const globe = globeRef.current;
+    if (globe) {
+      const scene = globe.scene();
+      const atmosphere = scene.getObjectByName('aegis-fresnel-atmosphere') as Mesh | undefined;
+      const starfield = scene.getObjectByName('aegis-starfield') as Group | undefined;
+      atmosphere?.removeFromParent();
+      starfield?.removeFromParent();
+      if (atmosphere) disposeObject(atmosphere);
+      if (starfield) disposeObject(starfield);
+      scene.getObjectByName('aegis-twilight-fill')?.removeFromParent();
+      if (bloomRef.current) globe.postProcessingComposer().removePass(bloomRef.current);
+    }
+    bloomRef.current = null;
+    globeMaterial.dispose();
+  }, [globeMaterial]);
+
   return (
-    <div ref={containerRef} className={`relative h-full w-full ${className}`}>
+    <div ref={containerRef} className={`relative h-full w-full overflow-hidden ${className}`}>
+      <div className="globe-star-dust" aria-hidden="true" />
       <ReactGlobe
         ref={globeRef}
         width={size.width || undefined}
         height={size.height || undefined}
+        onGlobeReady={configureScene}
         globeImageUrl={earthNightTexture}
+        bumpImageUrl={earthBumpTexture}
+        globeMaterial={globeMaterial}
+        showAtmosphere={false}
         backgroundColor="rgba(0,0,0,0)"
-        atmosphereColor="#3b82f6"
-        atmosphereAltitude={0.18}
         pointsData={points}
         pointLat="lat"
         pointLng="lng"
         pointAltitude="alt"
-        pointColor={(p) => ((p as GlobePoint).isFlagged ? DANGER_COLOR : ACCENT_COLOR)}
-        pointRadius={(p) => ((p as GlobePoint).isFlagged ? 0.6 : 0.35)}
+        pointColor={(point) => ((point as GlobePoint).isFlagged ? DANGER_COLOR : ACCENT_COLOR)}
+        pointRadius={(point) => ((point as GlobePoint).isFlagged ? 0.72 : 0.42)}
         pointResolution={32}
-        pointLabel={(p) => `${(p as GlobePoint).name} (${(p as GlobePoint).norad_id})`}
+        pointLabel={(point) => `${(point as GlobePoint).name} (${(point as GlobePoint).norad_id})`}
+        arcsData={mode === 'live' || mode === 'conjunction' ? trails : []}
+        arcStartLat="lat"
+        arcStartLng="lng"
+        arcStartAltitude="alt"
+        arcEndLat="endLat"
+        arcEndLng="endLng"
+        arcEndAltitude="endAlt"
+        arcColor={(trail: object) => (trail as OrbitTrail).isFlagged
+          ? ['rgba(255,91,103,0.72)', 'rgba(255,91,103,0.02)']
+          : ['rgba(96,165,250,0.46)', 'rgba(96,165,250,0.01)']}
+        arcStroke={0.22}
+        arcAltitude={0.065}
+        arcDashLength={0.48}
+        arcDashGap={0.72}
+        arcDashAnimateTime={5200}
+        arcsTransitionDuration={700}
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
-        ringColor={() => (t: number) => `rgba(239, 68, 68, ${1 - t})`}
-        ringResolution={128}
-        ringMaxRadius={3}
-        ringPropagationSpeed={2}
-        ringRepeatPeriod={1600}
+        ringAltitude="alt"
+        ringColor={() => (t: number) => `rgba(255, 91, 103, ${Math.pow(1 - t, 1.8)})`}
+        ringResolution={160}
+        ringMaxRadius={4.2}
+        ringPropagationSpeed={1.35}
+        ringRepeatPeriod={3100}
         pathsData={pathsData}
         pathPoints="coords"
         pathPointLat="lat"
@@ -127,6 +299,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
         pathDashGap={0.05}
         pathDashAnimateTime={3000}
       />
+      <GlobeHud markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged }) => ({ noradId: norad_id, name, x, y, flagged: isFlagged }))} />
     </div>
   );
 }

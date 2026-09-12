@@ -52,6 +52,12 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 - Wired into `pages/Monitor.tsx` as the central watch-floor viewport, surrounded by squared translucent tracking, conjunction, and frame telemetry panels. The globe remains the primary surface; operational overlays use `bg-background/88–90` plus subtle `backdrop-blur-sm`.
 - **Hazard ring/marker recipe:** `ringColor` must be a function of the ring's progress `t` (`(t) => \`rgba(239, 68, 68, ${1 - t})\``), not a flat color string — otherwise every overlapping ring generation renders at full opacity instead of fading. Keep `ringRepeatPeriod` >= one ring's full lifetime (`ringMaxRadius / ringPropagationSpeed * 1000`, currently 3/2*1000=1500ms vs. a 1600ms repeat) so generations never overlap. Points render as `CylinderGeometry` pins — set `pointResolution={32}` (three-globe's default of 12 facets visibly at this scale). Skipping any of these three produces a jagged/scratchy hazard indicator instead of a clean pulsing ring.
 
+**Scene enhancement recipe:** Keep one `Globe` and extend the `react-globe.gl` instance only through its public `scene()` and `postProcessingComposer()` methods. `Globe.tsx` installs a named Fresnel `ShaderMaterial` mesh, configures `UnrealBloomPass` on the existing composer, and removes its pass on unmount. Use local `earth-night.jpg` plus `earth-bump.png` for the globe colour/bump inputs. The sibling `GlobeHud.tsx` is a pointer-events-none SVG/CSS layer — corner brackets, mode readout, and projected marker labels — never a second WebGL engine.
+
+**Starfield recipe:** `createStarfield()` adds two deterministic Fibonacci-distributed `Points` layers to the same scene: a sparse cool field for depth and a much smaller warm field for visual hierarchy. It is intentionally behind the globe, depth-tested, and dim enough to stay below the bloom threshold. `.globe-star-dust` adds only five fixed CSS pinpricks as a static fallback texture, not a second animated star renderer.
+
+**Twilight material recipe:** `MeshPhongMaterial` keeps the local night texture and bump map while using a restrained cool emissive fill (`#071a36`, `0.28`), low shininess, and a `0.72` bump scale. A directional key plus named ambient fill make land and relief legible. Keep Fresnel intensity near `0.52` and bloom strength below `1`; increase light/material first, not overall exposure, when the globe needs to read brighter.
+
 ### Monitor Watch Floor
 
 File: `frontend/src/pages/Monitor.tsx`
