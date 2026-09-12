@@ -113,6 +113,27 @@ def load_all_tracked_objects() -> list[TrackedObject]:
     return load_tracked_objects_fixture()
 
 
+# Physically docked/co-located object groups within the 20-object curated set.
+# These satellites share a single station structure, so pairwise conjunction
+# detection reports them at ~0.0km/0.0km/s separation — a data-modeling
+# artifact (the propagated positions are identical), not a real collision
+# risk. Pairs where both NORAD IDs fall in the same group are excluded from
+# conjunction detection below. Determined empirically: every pair inside a
+# group propagates to exactly 0.0km apart, and no pair spans two groups.
+DOCKED_OBJECT_GROUPS: list[frozenset[str]] = [
+    frozenset({"25544", "36086", "49044", "67796", "68689", "68837"}),  # ISS complex (ZARYA/POISK/NAUKA + docked Crew Dragon/Cygnus/Progress)
+    frozenset({"48274", "53239", "54216", "69049", "69180"}),  # CSS complex (TIANHE/WENTIAN/MENGTIAN + docked Tianzhou/Shenzhou)
+]
+
+
+def _is_docked_pair(norad_id_a: str, norad_id_b: str) -> bool:
+    """True if both objects belong to the same physically docked group."""
+    return any(
+        norad_id_a in group and norad_id_b in group
+        for group in DOCKED_OBJECT_GROUPS
+    )
+
+
 # Known profiles for CelesTrak locked satellites; dynamic hash fallback provided for any other NORAD ID
 KNOWN_OPERATOR_PROFILES: dict[str, tuple[str, float, float, float]] = {
     # norad_id: (operator_name, mvi, fuel_margin_pct, delta_v_mps)
@@ -192,9 +213,12 @@ class Orchestrator:
         self._connections = connection_manager
 
     def detect_conjunctions(self) -> list[ConjunctionAlert]:
-        """Runs dynamic conjunction detection across all tracked satellites."""
+        """Runs dynamic conjunction detection across all tracked satellites,
+        excluding pairs that are physically docked/co-located (see
+        DOCKED_OBJECT_GROUPS) — those aren't real conjunctions."""
         all_objects = load_all_tracked_objects()
         alerts = run_detect_conjunctions(all_objects)
+        alerts = [a for a in alerts if not _is_docked_pair(a.primary_id, a.secondary_id)]
         return alerts if alerts else [_HARDCODED_ALERT]
 
     def monitor_snapshot_payload(self) -> dict:
