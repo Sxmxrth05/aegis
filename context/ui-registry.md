@@ -24,7 +24,16 @@ Built in `frontend/src/components/shared/NavBar.tsx` — 64px `bg-surface` bar w
 
 ### Globe Component
 *(configurable — live view / conjunction highlight / before-after trajectory modes)*
-← Agent fills this in when built
+Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` instance, driven entirely by props (never rebuilt per screen, per architecture.md invariant 9):
+- `trackedObjects: TrackedObject[]` (type in `globe/types.ts`, mirrors `schemas/tracked_object.py` field-for-field), `mode: 'live' | 'conjunction' | 'trajectory'`, optional `conjunctionAlert` (mirrors `schemas/conjunction.py`).
+- ECI `position_km` → lat/lng/alt conversion lives in `globe/eciToGeo.ts`, using `satellite.js`'s `eciToGeodetic`/`gstime` directly (no re-propagation needed — it just needs a position + timestamp).
+- Auto-sizes to its parent via a `ResizeObserver` (`globe/Globe.tsx`) rather than taking pixel `width`/`height` props — wrap it in a sized container (Monitor uses `h-[calc(100vh-4rem)] w-full` for full-bleed).
+- Colors: accent (`#3b82f6`) for normal points, danger (`#ef4444`) for anything matching `conjunctionAlert`'s `primary_id`/`secondary_id` — same semantic mapping as D3's `Badge`. In `'conjunction'` mode the flagged pair also gets a pulsing danger ring.
+- `'trajectory'` mode is accepted but currently renders identically to `'live'` — before/after maneuver arcs depend on Dev A's Phase 2 propagation arrays, not yet available. Wiring the prop now means `Trajectory.tsx` can reuse this same instance later with no shape change.
+- Globe texture (`earth-night.jpg`) is copied into `frontend/src/assets/` rather than imported from `three-globe`'s package directly — `three-globe`'s `exports` map blocks deep subpath imports in this version, and a local copy is also better for the offline demo path than the alternative unpkg CDN URL.
+- Mock data: `globe/mockTrackedObjects.ts` has 5 hand-written `TrackedObject`s, physically real (each one's `position_km`/`velocity_kmps` came from actually running `satellite.js`'s SGP4 propagation against a real TLE at a fixed timestamp, not fabricated numbers). `TODO(Dev A)` comment marks where to swap in the real Phase 0 fixture or live data once available.
+- **Vite config note:** `satellite.js` ships a WASM build using top-level await, which esbuild's default target can't pre-bundle. `vite.config.ts` now sets `build.target`/`optimizeDeps.esbuildOptions.target` to `'esnext'` to fix this — needed by any future code importing `satellite.js`, not just Globe.
+- Wired into `pages/Monitor.tsx` in `'live'` mode with a floating legend `Card` (object counts + accent/danger color key), verified via headless-Chromium screenshot.
 
 ### Conjunction Details
 *(side-by-side satellite stat cards, TCA/distance/probability panel)*

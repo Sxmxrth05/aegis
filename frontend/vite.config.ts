@@ -7,4 +7,15 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  // satellite.js ships a WASM-accelerated build that uses top-level await;
+  // esbuild's default target predates that, so both the dep pre-bundle step
+  // and the production build need bumping to esnext to load it.
+  build: {
+    target: 'esnext',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
 });
