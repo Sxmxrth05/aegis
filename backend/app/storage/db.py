@@ -1,226 +1,152 @@
 """
-db.py — SQLite persistence for Aegis negotiation sessions and history (Dev A/C Phase 2).
+db.py — Dev A (Phase 2 Workstream A) + Dev C reconciliation
 
-Schema matches architecture.md §Database Schema:
-  - conjunctions
-  - negotiation_messages
-  - resolutions
+SQLite Persistence & History Storage Engine.
+Provides durable local persistence for conjunction alerts, negotiation transcripts,
+and resolutions, matching architecture.md's DB schema exactly.
 
-Provides CRUD operations to persist completed or escalated negotiation sessions
-and query history for the frontend History view.
+Provides query functions for Dev D's History table (/history) and REST endpoints.
+
+Ownership: Dev A (primary), reconciled with Dev C's interface aliases.
+
+Dev C compatibility: save_conjunction, save_completed_session, get_history_sessions,
+and get_session_by_conjunction_id are all re-exported aliases below so any existing
+caller in agents/negotiator.py or storage/tests/ continues to work unchanged.
 """
 
 from __future__ import annotations
 
 import logging
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from contextlib import contextmanager
+from pydantic import BaseModel
 
-# Default DB location in backend/app/storage/aegis.db
-DEFAULT_DB_PATH = Path(__file__).resolve().parent / "aegis.db"
+try:
+    from backend.app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
+    from backend.app.schemas.negotiation import NegotiationMessage, Resolution, ResolutionStatus
+except ImportError:
+    from app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
+    from app.schemas.negotiation import NegotiationMessage, Resolution, ResolutionStatus
+
 
 logger = logging.getLogger("[storage.db]")
 
-CREATE_TABLES_SQL = """
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE IF NOT EXISTS conjunctions (
-    id TEXT PRIMARY KEY,
-    primary_id TEXT NOT NULL,
-    secondary_id TEXT NOT NULL,
-    tca_utc TEXT NOT NULL,
-    miss_distance_km REAL NOT NULL,
-    relative_velocity_kmps REAL NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS negotiation_messages (
-    id TEXT PRIMARY KEY,
-    conjunction_id TEXT NOT NULL,
-    agent_id TEXT NOT NULL,
-    round INTEGER NOT NULL,
-    yield_score REAL,
-    justification_text TEXT NOT NULL,
-    proposed_action TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (conjunction_id) REFERENCES conjunctions(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS resolutions (
-    id TEXT PRIMARY KEY,
-    conjunction_id TEXT NOT NULL,
-    maneuvering_agent TEXT NOT NULL,
-    maneuver_type TEXT NOT NULL,
-    delta_v_mps REAL NOT NULL,
-    execution_time_utc TEXT NOT NULL,
-    expected_min_distance_km REAL NOT NULL,
-    residual_risk REAL NOT NULL,
-    rationale_text TEXT NOT NULL,
-    status TEXT NOT NULL,
-    FOREIGN KEY (conjunction_id) REFERENCES conjunctions(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_messages_conjunction ON negotiation_messages(conjunction_id);
-CREATE INDEX IF NOT EXISTS idx_resolutions_conjunction ON resolutions(conjunction_id);
-CREATE INDEX IF NOT EXISTS idx_conjunctions_created ON conjunctions(created_at DESC);
-"""
+DEFAULT_DB_PATH = Path(__file__).parent / "aegis.db"
 
 
-@contextmanager
-def _get_connection(db_path: Path | str | None = None):
-    """Creates a connection to SQLite database with foreign keys enabled, closing on exit."""
-    path = db_path if db_path is not None else DEFAULT_DB_PATH
-    conn = sqlite3.connect(str(path))
+# ---------------------------------------------------------------------------
+# Connection Helpers
+# ---------------------------------------------------------------------------
+
+def get_db_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    """
+    Creates and returns a SQLite connection configured with Row factory
+    and WAL mode for high reliability and clean dict access.
+    """
+    if isinstance(db_path, Path):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path_str = str(db_path)
+    else:
+        db_path_str = db_path
+
+    conn = sqlite3.connect(db_path_str)
     conn.row_factory = sqlite3.Row
+    # Foreign key enforcement & WAL mode (if not in-memory)
     conn.execute("PRAGMA foreign_keys = ON;")
-    try:
-        yield conn
+    if db_path_str != ":memory:":
+        conn.execute("PRAGMA journal_mode = WAL;")
+    return conn
+
+
+def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
+    """
+    Initializes the SQLite database schema matching architecture.md §Database Schema.
+    Idempotent: uses CREATE TABLE IF NOT EXISTS.
+    """
+    with get_db_connection(db_path) as conn:
+        cursor = conn.cursor()
+
+        # 1. conjunctions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conjunctions (
+                id TEXT PRIMARY KEY,
+                primary_id TEXT NOT NULL,
+                secondary_id TEXT NOT NULL,
+                tca_utc TEXT NOT NULL,
+                miss_distance_km REAL NOT NULL,
+                relative_velocity_kmps REAL NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+        """)
+
+        # 2. negotiation_messages table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS negotiation_messages (
+                id TEXT PRIMARY KEY,
+                conjunction_id TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                round INTEGER NOT NULL,
+                yield_score REAL,
+                justification_text TEXT NOT NULL,
+                proposed_action TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (conjunction_id) REFERENCES conjunctions (id) ON DELETE CASCADE
+            );
+        """)
+
+        # 3. resolutions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resolutions (
+                id TEXT PRIMARY KEY,
+                conjunction_id TEXT NOT NULL,
+                maneuvering_agent TEXT NOT NULL,
+                maneuver_type TEXT NOT NULL,
+                delta_v_mps REAL NOT NULL,
+                execution_time_utc TEXT NOT NULL,
+                expected_min_distance_km REAL NOT NULL,
+                residual_risk REAL NOT NULL,
+                rationale_text TEXT NOT NULL,
+                status TEXT NOT NULL,
+                FOREIGN KEY (conjunction_id) REFERENCES conjunctions (id) ON DELETE CASCADE
+            );
+        """)
+
+        # Indexes for fast filtering and joins
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conjunctions_status ON conjunctions (status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conjunctions_created ON conjunctions (created_at DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conjunction ON negotiation_messages (conjunction_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_resolutions_conjunction ON resolutions (conjunction_id);")
+
         conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+
+    logger.info("Initialized database tables at %s", db_path)
 
 
-def init_db(db_path: Path | str | None = None) -> None:
-    """Initializes the database schema if tables do not exist."""
-    with _get_connection(db_path) as conn:
-        with conn:
-            conn.executescript(CREATE_TABLES_SQL)
-    logger.info("Initialized database tables at %s", db_path or DEFAULT_DB_PATH)
+# ---------------------------------------------------------------------------
+# Write Operations (Transactions)
+# ---------------------------------------------------------------------------
 
-
-def _to_dict(obj: Any) -> dict[str, Any]:
-    """Helper to convert Pydantic model, dataclass, or dict to plain dict."""
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump()
-    if hasattr(obj, "__dict__") and not isinstance(obj, dict):
-        return dict(obj.__dict__)
-    if isinstance(obj, dict):
-        return dict(obj)
-    raise ValueError(f"Cannot convert object of type {type(obj)} to dict")
-
-
-def save_conjunction(conjunction: Any, db_path: Path | str | None = None) -> None:
-    """Inserts or replaces a conjunction record."""
-    c = _to_dict(conjunction)
-    # Handle enum values
-    status_val = c["status"].value if hasattr(c["status"], "value") else str(c["status"])
-
-    sql = """
-    INSERT INTO conjunctions (
-        id, primary_id, secondary_id, tca_utc, miss_distance_km,
-        relative_velocity_kmps, status, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-        status=excluded.status,
-        miss_distance_km=excluded.miss_distance_km,
-        relative_velocity_kmps=excluded.relative_velocity_kmps;
-    """
-    with _get_connection(db_path) as conn:
-        conn.execute(
-            sql,
-            (
-                str(c["id"]),
-                str(c["primary_id"]),
-                str(c["secondary_id"]),
-                str(c["tca_utc"]),
-                float(c["miss_distance_km"]),
-                float(c["relative_velocity_kmps"]),
-                status_val,
-                str(c["created_at"]),
-            ),
-        )
-
-
-def save_negotiation_message(message: Any, db_path: Path | str | None = None) -> None:
-    """Inserts a negotiation message record."""
-    m = _to_dict(message)
-    agent_val = m["agent_id"].value if hasattr(m["agent_id"], "value") else str(m["agent_id"])
-    action_val = m["proposed_action"].value if hasattr(m["proposed_action"], "value") else str(m["proposed_action"])
-    yield_val = float(m["yield_score"]) if m.get("yield_score") is not None else None
-
-    sql = """
-    INSERT OR REPLACE INTO negotiation_messages (
-        id, conjunction_id, agent_id, round, yield_score,
-        justification_text, proposed_action, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-    """
-    with _get_connection(db_path) as conn:
-        conn.execute(
-            sql,
-            (
-                str(m["id"]),
-                str(m["conjunction_id"]),
-                agent_val,
-                int(m["round"]),
-                yield_val,
-                str(m["justification_text"]),
-                action_val,
-                str(m["created_at"]),
-            ),
-        )
-
-
-def save_resolution(resolution: Any, db_path: Path | str | None = None) -> None:
-    """Inserts or replaces a resolution record."""
-    r = _to_dict(resolution)
-    status_val = r["status"].value if hasattr(r["status"], "value") else str(r["status"])
-
-    sql = """
-    INSERT OR REPLACE INTO resolutions (
-        id, conjunction_id, maneuvering_agent, maneuver_type, delta_v_mps,
-        execution_time_utc, expected_min_distance_km, residual_risk,
-        rationale_text, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    """
-    with _get_connection(db_path) as conn:
-        conn.execute(
-            sql,
-            (
-                str(r["id"]),
-                str(r["conjunction_id"]),
-                str(r["maneuvering_agent"]),
-                str(r["maneuver_type"]),
-                float(r["delta_v_mps"]),
-                str(r["execution_time_utc"]),
-                float(r["expected_min_distance_km"]),
-                float(r["residual_risk"]),
-                str(r["rationale_text"]),
-                status_val,
-            ),
-        )
-
-
-def save_completed_session(
-    conjunction: Any,
-    messages: Iterable[Any],
-    resolution: Any,
-    db_path: Path | str | None = None,
+def save_conjunction_alert(
+    alert: ConjunctionAlert | dict,
+    db_path: Path | str = DEFAULT_DB_PATH,
 ) -> None:
-    """
-    Atomically saves a completed or escalated negotiation session (conjunction,
-    all negotiation transcript messages, and final resolution).
-    """
-    init_db(db_path)
-    c = _to_dict(conjunction)
-    r = _to_dict(resolution)
+    """Inserts or updates a ConjunctionAlert in the database."""
+    if isinstance(alert, dict):
+        alert = ConjunctionAlert(**alert)
 
-    c_status = c["status"].value if hasattr(c["status"], "value") else str(c["status"])
-    r_status = r["status"].value if hasattr(r["status"], "value") else str(r["status"])
+    status_str = alert.status.value if hasattr(alert.status, "value") else str(alert.status)
 
-    with _get_connection(db_path) as conn:
-        # 1. Upsert conjunction
+    with get_db_connection(db_path) as conn:
         conn.execute(
             """
             INSERT INTO conjunctions (
-                id, primary_id, secondary_id, tca_utc, miss_distance_km,
-                relative_velocity_kmps, status, created_at
+                id, primary_id, secondary_id, tca_utc,
+                miss_distance_km, relative_velocity_kmps, status, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 status=excluded.status,
@@ -228,24 +154,73 @@ def save_completed_session(
                 relative_velocity_kmps=excluded.relative_velocity_kmps;
             """,
             (
-                str(c["id"]),
-                str(c["primary_id"]),
-                str(c["secondary_id"]),
-                str(c["tca_utc"]),
-                float(c["miss_distance_km"]),
-                float(c["relative_velocity_kmps"]),
-                c_status,
-                str(c["created_at"]),
+                alert.id,
+                alert.primary_id,
+                alert.secondary_id,
+                alert.tca_utc,
+                alert.miss_distance_km,
+                alert.relative_velocity_kmps,
+                status_str,
+                alert.created_at,
             ),
         )
+        conn.commit()
 
-        # 2. Insert messages
+
+def update_conjunction_status(
+    conjunction_id: str,
+    status: str | ConjunctionStatus,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> None:
+    """Updates the status of an existing conjunction alert."""
+    status_str = status.value if hasattr(status, "value") else str(status)
+    with get_db_connection(db_path) as conn:
+        conn.execute(
+            "UPDATE conjunctions SET status = ? WHERE id = ?;",
+            (status_str, conjunction_id),
+        )
+        conn.commit()
+
+
+def save_negotiation_message(
+    message: NegotiationMessage | dict,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> None:
+    """Inserts a single NegotiationMessage."""
+    if isinstance(message, dict):
+        message = NegotiationMessage(**message)
+
+    with get_db_connection(db_path) as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO negotiation_messages (
+                id, conjunction_id, agent_id, round, yield_score,
+                justification_text, proposed_action, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                message.id,
+                message.conjunction_id,
+                message.agent_id.value if hasattr(message.agent_id, "value") else str(message.agent_id),
+                message.round,
+                message.yield_score,
+                message.justification_text,
+                message.proposed_action.value if hasattr(message.proposed_action, "value") else str(message.proposed_action),
+                message.created_at,
+            ),
+        )
+        conn.commit()
+
+
+def save_negotiation_messages(
+    messages: list[NegotiationMessage | dict],
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> None:
+    """Inserts a list of NegotiationMessages in a single transaction."""
+    with get_db_connection(db_path) as conn:
         for msg in messages:
-            m = _to_dict(msg)
-            agent_val = m["agent_id"].value if hasattr(m["agent_id"], "value") else str(m["agent_id"])
-            action_val = m["proposed_action"].value if hasattr(m["proposed_action"], "value") else str(m["proposed_action"])
-            yield_val = float(m["yield_score"]) if m.get("yield_score") is not None else None
-
+            if isinstance(msg, dict):
+                msg = NegotiationMessage(**msg)
             conn.execute(
                 """
                 INSERT OR REPLACE INTO negotiation_messages (
@@ -254,74 +229,296 @@ def save_completed_session(
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
-                    str(m["id"]),
-                    str(m["conjunction_id"]),
-                    agent_val,
-                    int(m["round"]),
-                    yield_val,
-                    str(m["justification_text"]),
-                    action_val,
-                    str(m["created_at"]),
+                    msg.id,
+                    msg.conjunction_id,
+                    msg.agent_id.value if hasattr(msg.agent_id, "value") else str(msg.agent_id),
+                    msg.round,
+                    msg.yield_score,
+                    msg.justification_text,
+                    msg.proposed_action.value if hasattr(msg.proposed_action, "value") else str(msg.proposed_action),
+                    msg.created_at,
                 ),
             )
+        conn.commit()
 
-        # 3. Upsert resolution
+
+def save_resolution(
+    resolution: Resolution | dict,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> None:
+    """Inserts or updates a Resolution."""
+    if isinstance(resolution, dict):
+        resolution = Resolution(**resolution)
+
+    status_str = resolution.status.value if hasattr(resolution.status, "value") else str(resolution.status)
+
+    with get_db_connection(db_path) as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO resolutions (
-                id, conjunction_id, maneuvering_agent, maneuver_type, delta_v_mps,
-                execution_time_utc, expected_min_distance_km, residual_risk,
-                rationale_text, status
+                id, conjunction_id, maneuvering_agent, maneuver_type,
+                delta_v_mps, execution_time_utc, expected_min_distance_km,
+                residual_risk, rationale_text, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
-                str(r["id"]),
-                str(r["conjunction_id"]),
-                str(r["maneuvering_agent"]),
-                str(r["maneuver_type"]),
-                float(r["delta_v_mps"]),
-                str(r["execution_time_utc"]),
-                float(r["expected_min_distance_km"]),
-                float(r["residual_risk"]),
-                str(r["rationale_text"]),
-                r_status,
+                resolution.id,
+                resolution.conjunction_id,
+                resolution.maneuvering_agent,
+                resolution.maneuver_type,
+                resolution.delta_v_mps,
+                resolution.execution_time_utc,
+                resolution.expected_min_distance_km,
+                resolution.residual_risk,
+                resolution.rationale_text,
+                status_str,
+            ),
+        )
+        conn.commit()
+
+
+def save_negotiation_session(
+    alert: ConjunctionAlert | dict,
+    messages: list[NegotiationMessage | dict],
+    resolution: Resolution | dict | None = None,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> None:
+    """
+    Atomic transaction: Saves the conjunction alert, all negotiation messages,
+    and the final resolution together in one single transaction.
+    """
+    if isinstance(alert, dict):
+        alert = ConjunctionAlert(**alert)
+    if resolution and isinstance(resolution, dict):
+        resolution = Resolution(**resolution)
+
+    alert_status_str = alert.status.value if hasattr(alert.status, "value") else str(alert.status)
+
+    with get_db_connection(db_path) as conn:
+        # 1. Alert
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO conjunctions (
+                id, primary_id, secondary_id, tca_utc,
+                miss_distance_km, relative_velocity_kmps, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                alert.id,
+                alert.primary_id,
+                alert.secondary_id,
+                alert.tca_utc,
+                alert.miss_distance_km,
+                alert.relative_velocity_kmps,
+                alert_status_str,
+                alert.created_at,
             ),
         )
 
+        # 2. Messages
+        for msg in messages:
+            if isinstance(msg, dict):
+                msg = NegotiationMessage(**msg)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO negotiation_messages (
+                    id, conjunction_id, agent_id, round, yield_score,
+                    justification_text, proposed_action, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    msg.id,
+                    msg.conjunction_id,
+                    msg.agent_id.value if hasattr(msg.agent_id, "value") else str(msg.agent_id),
+                    msg.round,
+                    msg.yield_score,
+                    msg.justification_text,
+                    msg.proposed_action.value if hasattr(msg.proposed_action, "value") else str(msg.proposed_action),
+                    msg.created_at,
+                ),
+            )
+
+        # 3. Resolution (optional)
+        if resolution:
+            res_status_str = resolution.status.value if hasattr(resolution.status, "value") else str(resolution.status)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO resolutions (
+                    id, conjunction_id, maneuvering_agent, maneuver_type,
+                    delta_v_mps, execution_time_utc, expected_min_distance_km,
+                    residual_risk, rationale_text, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    resolution.id,
+                    resolution.conjunction_id,
+                    resolution.maneuvering_agent,
+                    resolution.maneuver_type,
+                    resolution.delta_v_mps,
+                    resolution.execution_time_utc,
+                    resolution.expected_min_distance_km,
+                    resolution.residual_risk,
+                    resolution.rationale_text,
+                    res_status_str,
+                ),
+            )
+
+        conn.commit()
+
     logger.info(
-        "Successfully saved negotiation session for conjunction %s (%d messages, status %s)",
-        c["id"],
-        len(list(messages)),
-        r_status,
+        "Saved negotiation session for conjunction %s (%d messages)",
+        alert.id,
+        len(messages),
     )
 
 
-def get_session_by_conjunction_id(
-    conjunction_id: str,
-    db_path: Path | str | None = None,
-) -> dict[str, Any] | None:
-    """
-    Retrieves a complete session (conjunction, ordered messages, resolution) by conjunction ID.
-    Returns None if conjunction not found.
-    """
-    init_db(db_path)
-    with _get_connection(db_path) as conn:
-        c_row = conn.execute("SELECT * FROM conjunctions WHERE id = ?", (conjunction_id,)).fetchone()
-        if not c_row:
-            return None
+# ---------------------------------------------------------------------------
+# Read & Query Operations (History Table API)
+# ---------------------------------------------------------------------------
 
-        m_rows = conn.execute(
-            "SELECT * FROM negotiation_messages WHERE conjunction_id = ? ORDER BY round ASC, created_at ASC",
+def get_conjunction(
+    conjunction_id: str,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> Optional[dict]:
+    """Retrieves a single ConjunctionAlert as a dictionary."""
+    with get_db_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM conjunctions WHERE id = ?;", (conjunction_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_negotiation_messages(
+    conjunction_id: str,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> list[dict]:
+    """Retrieves all NegotiationMessages for a given conjunction, ordered by round/created_at."""
+    with get_db_connection(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM negotiation_messages
+            WHERE conjunction_id = ?
+            ORDER BY round ASC, created_at ASC;
+            """,
             (conjunction_id,),
         ).fetchall()
+        return [dict(row) for row in rows]
 
-        r_row = conn.execute("SELECT * FROM resolutions WHERE conjunction_id = ?", (conjunction_id,)).fetchone()
 
-        return {
-            "conjunction": dict(c_row),
-            "messages": [dict(m) for m in m_rows],
-            "resolution": dict(r_row) if r_row else None,
-        }
+def get_resolution(
+    conjunction_id: str,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> Optional[dict]:
+    """Retrieves the Resolution record for a conjunction."""
+    with get_db_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM resolutions WHERE conjunction_id = ?;", (conjunction_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_history(
+    status_filter: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> list[dict]:
+    """
+    Primary query for Dev D's History page (/history).
+    Returns a joined list of past conjunctions with their resolution details
+    and message counts. Supports filtering by status ('resolved', 'escalated', etc.).
+
+    Uses a dual-status filter: matches on conjunction.status OR resolution.status
+    so that e.g. status='approved' returns rows where the resolution was approved
+    regardless of the conjunction's own status string.
+    """
+    with get_db_connection(db_path) as conn:
+        query = """
+            SELECT
+                c.id AS conjunction_id,
+                c.primary_id,
+                c.secondary_id,
+                c.tca_utc,
+                c.miss_distance_km AS initial_miss_distance_km,
+                c.relative_velocity_kmps,
+                c.status AS conjunction_status,
+                c.created_at AS alert_created_at,
+                r.maneuvering_agent,
+                r.maneuver_type,
+                r.delta_v_mps,
+                r.execution_time_utc,
+                r.expected_min_distance_km AS post_maneuver_miss_distance_km,
+                r.status AS resolution_status,
+                r.rationale_text,
+                (SELECT COUNT(*) FROM negotiation_messages m WHERE m.conjunction_id = c.id) AS message_count
+            FROM conjunctions c
+            LEFT JOIN resolutions r ON c.id = r.conjunction_id
+        """
+        params: list[Any] = []
+        if status_filter:
+            query += " WHERE (c.status = ? OR r.status = ?)"
+            params.extend([status_filter, status_filter])
+
+        query += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?;"
+        params.extend([limit, offset])
+
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_full_session_details(
+    conjunction_id: str,
+    db_path: Path | str = DEFAULT_DB_PATH,
+) -> Optional[dict]:
+    """
+    Returns the complete session record (conjunction alert, negotiation messages
+    transcript, and resolution) for detailed modal / history drill-down views.
+
+    Returns: {"conjunction": dict, "transcript": list[dict], "resolution": dict | None}
+    or None if the conjunction_id is not found.
+    """
+    alert = get_conjunction(conjunction_id, db_path)
+    if not alert:
+        return None
+
+    messages = get_negotiation_messages(conjunction_id, db_path)
+    resolution = get_resolution(conjunction_id, db_path)
+
+    return {
+        "conjunction": alert,
+        "transcript": messages,
+        "resolution": resolution,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat aliases (Dev C interface)
+# ---------------------------------------------------------------------------
+# Dev C's agents/negotiator.py calls save_conjunction(), save_completed_session(),
+# get_history_sessions(), and get_session_by_conjunction_id(). These are all
+# thin wrappers that delegate to the primary functions above.
+# ---------------------------------------------------------------------------
+
+def save_conjunction(
+    conjunction: Any,
+    db_path: Path | str | None = None,
+) -> None:
+    """Alias for save_conjunction_alert(). Accepts Pydantic model or dict."""
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    if isinstance(conjunction, dict):
+        conjunction = ConjunctionAlert(**conjunction)
+    save_conjunction_alert(conjunction, _db)
+
+
+def save_completed_session(
+    conjunction: Any,
+    messages: Iterable[Any],
+    resolution: Any,
+    db_path: Path | str | None = None,
+) -> None:
+    """Alias for save_negotiation_session(). Accepts Pydantic models or dicts."""
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    save_negotiation_session(conjunction, list(messages), resolution, _db)
 
 
 def get_history_sessions(
@@ -331,42 +528,30 @@ def get_history_sessions(
     db_path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Queries past sessions for the History table, sorted by most recent first.
-    Includes conjunction metadata, message count, and final resolution details.
+    Alias for get_history() with reordered kwargs matching Dev C's signature.
+    Note: get_history() uses positional status_filter first; this alias
+    accepts the keyword-arg order Dev C used.
     """
-    init_db(db_path)
-    with _get_connection(db_path) as conn:
-        query = """
-        SELECT 
-            c.id AS conjunction_id,
-            c.primary_id,
-            c.secondary_id,
-            c.tca_utc,
-            c.miss_distance_km,
-            c.relative_velocity_kmps,
-            c.status AS conjunction_status,
-            c.created_at,
-            r.id AS resolution_id,
-            r.maneuvering_agent,
-            r.maneuver_type,
-            r.delta_v_mps,
-            r.execution_time_utc,
-            r.expected_min_distance_km,
-            r.residual_risk,
-            r.rationale_text,
-            r.status AS resolution_status,
-            (SELECT COUNT(*) FROM negotiation_messages m WHERE m.conjunction_id = c.id) AS message_count
-        FROM conjunctions c
-        LEFT JOIN resolutions r ON r.conjunction_id = c.id
-        """
-        params: list[Any] = []
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    return get_history(status_filter=status_filter, limit=limit, offset=offset, db_path=_db)
 
-        if status_filter:
-            query += " WHERE c.status = ? OR r.status = ?"
-            params.extend([status_filter, status_filter])
 
-        query += " ORDER BY c.created_at DESC, c.tca_utc DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
-        rows = conn.execute(query, tuple(params)).fetchall()
-        return [dict(row) for row in rows]
+def get_session_by_conjunction_id(
+    conjunction_id: str,
+    db_path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Alias for get_full_session_details().
+    Returns {"conjunction": dict, "messages": list[dict], "resolution": dict | None}
+    matching Dev C's key naming (uses 'messages' instead of 'transcript').
+    """
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    result = get_full_session_details(conjunction_id, _db)
+    if result is None:
+        return None
+    # Dev C's version used key "messages" not "transcript"
+    return {
+        "conjunction": result["conjunction"],
+        "messages": result["transcript"],
+        "resolution": result["resolution"],
+    }

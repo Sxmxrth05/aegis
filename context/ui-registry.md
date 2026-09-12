@@ -16,7 +16,13 @@ A living catalogue of components as they get built, so later screens stay visual
 
 ### Landing Page
 *(hero section, stat cards, CTA buttons)*
-← Agent fills this in when built
+Built in `frontend/src/pages/Landing.tsx` — three sections:
+- **Hero:** eyebrow label (uppercase tracking-widest `text-muted`), 56px/700 heading with an inline `text-accent` span + `textShadow` glow, 2-line sub-heading in `text-secondary`, two `Button` CTAs (`Link` + `Button` primary/secondary), a decorative `radial-gradient` overlay (pointer-events-none, purely visual, does not tint a card). Background glow uses an inline `style` radial-gradient on the section, not a colored `Card`.
+- **Stat cards:** 4-column responsive grid of `Card` components. Each card: `Badge` (status-color semantic), `font-mono text-3xl` stat value, label in `text-primary`, sub-label in `text-muted`. No colored card backgrounds — color comes through the Badge only.
+- **How it works:** 4-column grid of `Card` components. Each: `font-mono text-xs text-accent` step number, `text-base font-semibold` heading, `text-sm text-secondary` body copy.
+- **Demo CTA banner:** `rounded-xl border border-border` div with a `linear-gradient` inline style (not a colored Card — uses `bg-surface-secondary` as base, gradient is a subtle blue tint overlay). Two CTA buttons centred.
+- **Footer:** `border-t border-border` bar, `text-xs text-muted` attribution copy.
+- All CTAs: `Link` from `react-router-dom` wrapping `Button` — `/monitor` and `/negotiate`.
 
 ### Shared Nav
 *(top navigation bar, used across all pages)*
@@ -38,15 +44,20 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 
 ### Conjunction Details
 *(side-by-side satellite stat cards, TCA/distance/probability panel)*
-← Agent fills this in when built
+Built in `frontend/src/pages/Negotiate.tsx`, replacing the placeholder route. All built from D3's `Card`/`Badge`/`Button` primitives, no new component files:
+- Reads `activeConjunctionAlert`/`trackedObjects` from `useNegotiationStore` — same store Monitor.tsx reads, not a separate fetch. Honest empty state (`Card` with explanatory text) when there's no active alert yet, rather than fabricating one.
+- **Two satellite stat cards** (`SatelliteCard`, a local component in the same file): `name`/`norad_id` direct from `TrackedObject`; `Altitude` and `Velocity` are real, computed client-side from `position_km`/`velocity_kmps` (vector magnitude, altitude = `|position_km| - 6371`) — not fabricated, not from the backend directly. `Operator`, `Fuel Δv margin`, `Mission priority`, `Maneuverability` are shown as `TBD` (muted, `font-mono`) with a one-line caption explaining why — these concepts exist in the backend (`OperatorProfile`'s `mvi`/`fuel_margin_pct`/`delta_v_mps`) but aren't part of any payload the frontend currently receives pre-negotiation, so labeling them TBD is the honest choice per this project's "never fabricate a number" ethos.
+- **Conjunction Assessment card**: `tca_utc`, `miss_distance_km`, `relative_velocity_kmps` direct from `ConjunctionAlert`; `Collision probability` shown as `TBD` — no such field exists in the schema.
+- Status `Badge` mapped from `ConjunctionStatus`: `alerted`/`escalated` → danger, `negotiating` → warning, `resolved`/`stood_down` → success.
+- **"Start Agent Negotiation" button**: on click, opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (see Data Layer section below for the `useAegisSocket` variant this needed) — every incoming envelope is `console.log`'d and counted; no transcript UI yet (that's the Negotiation Console, a separate task). Button disables and relabels once started.
 
 ### Negotiation Console
 *(two-column live transcript, round-stage tracker)*
-← Agent fills this in when built
+Built in `frontend/src/components/negotiation/NegotiationConsole.tsx` — maps over `messages` from the store, rendering Operator A on the left, Operator B on the right, and Validation Agent centered. Uses existing `Card` and `Badge` primitives.
 
 ### Negotiation Result
 *(agreed plan card, rationale block, mini trajectory preview)*
-← Agent fills this in when built
+Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — displays final agreed maneuver (delta-V, expected miss distance, residual risk) and rationale text. Handles the 'no safe maneuver found' state distinctly. Mini trajectory preview pending Phase 2 Globe enhancements.
 
 ### Trajectory Simulation
 *(globe in before/after mode, timeline scrubber)*
@@ -102,6 +113,8 @@ Not a visual component, but logged here per the usual pattern since every screen
 **Consumers:** `NavBar.tsx`'s live-status pill now reads real `connectionStatus` (4-state color/label map: connecting=warning, connected=success "Live", reconnecting=warning+pulse, disconnected=danger) instead of being static. `Monitor.tsx` reads live `trackedObjects`/`activeConjunctionAlert`; falls back to D4's `mockTrackedObjects.ts` whenever the live array is empty (true today, since the backend snapshot doesn't carry tracked-object state yet) so the globe stays populated either way.
 
 **Verified end-to-end:** with the real backend running, the globe correctly received B3's live `conjunction_alert` and switched to `'conjunction'` mode with a hazard ring on the matching mock satellites. Killing the backend mid-session showed `Reconnecting` (not a freeze); restarting it produced a fresh `Live` state with the alert re-applied from the new snapshot — confirmed via headless-Chromium screenshots at each stage.
+
+**`useAegisSocket()` options (added for the Conjunction Details screen):** now takes an options object — `{ url?, enabled?, onEnvelope?, updateStore? }` — all optional, so the existing no-arg call in `App.tsx` is unaffected. `enabled` (default `true`) lets a connection be created on a user action instead of on mount — pass `false` until then, since hooks must still be called unconditionally on every render. `updateStore` (default `true`) controls whether this connection writes into the shared store at all; the one persistent `/ws/monitor` connection in `App.tsx` keeps `updateStore: true` (it owns `connectionStatus` for NavBar's pill), while a secondary connection — e.g. `Negotiate.tsx`'s per-negotiation socket to `/ws/negotiation/{id}` — passes `updateStore: false` so it can't cross-talk with the global store or make NavBar's status flicker based on an unrelated connection. `onEnvelope` receives every in-order, post-snapshot envelope regardless of `updateStore`; it's held in a `ref` internally so passing a fresh inline arrow function each render doesn't tear down and reconnect the socket. Also added `buildNegotiationWsUrl(conjunctionId)`, which derives the negotiation URL from wherever `VITE_WS_URL`/the hardcoded default points the monitor socket, so both routes share one source of truth for host/port.
 
 ---
 

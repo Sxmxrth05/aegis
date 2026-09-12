@@ -9,23 +9,42 @@ from datetime import datetime, timezone
 
 import pytest
 
-from backend.app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
-from backend.app.schemas.negotiation import (
-    AgentId,
-    NegotiationMessage,
-    ProposedAction,
-    Resolution,
-    ResolutionStatus,
-)
-from backend.app.storage.db import (
-    init_db,
-    save_completed_session,
-    save_conjunction,
-    save_negotiation_message,
-    save_resolution,
-    get_session_by_conjunction_id,
-    get_history_sessions,
-)
+try:
+    from backend.app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
+    from backend.app.schemas.negotiation import (
+        AgentId,
+        NegotiationMessage,
+        ProposedAction,
+        Resolution,
+        ResolutionStatus,
+    )
+    from backend.app.storage.db import (
+        init_db,
+        save_completed_session,
+        save_conjunction,
+        save_negotiation_message,
+        save_resolution,
+        get_session_by_conjunction_id,
+        get_history_sessions,
+    )
+except ImportError:
+    from app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
+    from app.schemas.negotiation import (
+        AgentId,
+        NegotiationMessage,
+        ProposedAction,
+        Resolution,
+        ResolutionStatus,
+    )
+    from app.storage.db import (
+        init_db,
+        save_completed_session,
+        save_conjunction,
+        save_negotiation_message,
+        save_resolution,
+        get_session_by_conjunction_id,
+        get_history_sessions,
+    )
 
 
 @pytest.fixture

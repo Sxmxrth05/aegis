@@ -132,18 +132,16 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 ---
 
 ### Workstream D — Frontend Experience & WebSocket Client
-**Owner:** Dev D (D1, D3–D6 covered by Dev B while Dev D was tied up — see each row's notes)
-**Current task:** D2 (Landing page) — the only task in this workstream not yet started
-**Status:** 5 of 6 tasks complete and merged (D1, D3, D4, D5, D6); D2 outstanding
-**Blocked by:** Nothing
-**Waiting on:** Nothing
-**Next:** D2
+**Owner:** Dev D
+**Current task:** D Phase 2 — History table
+**Status:** All Phase 2 screens (Negotiation Console, Result Card, History Table, Trajectory Simulation) complete and wired.
+**Next:** Phase 3 Demo Hardening and end-to-end integration tests.
 **Merge status:** D1 (`main`), D3 (`dev-d/shared-primitives`), D4 (`dev-d/globe-component` + follow-up fixes on `dev-d/globe-fixes`), D5 and D6 (`dev-d/globe-fixes`) all merged to `main`. D2 not started.
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
 | D1 | Vite + React shell, Tailwind w/ `ui-tokens.md`, top nav w/ placeholder routes | `[M]` | Scaffolded and pushed to `main`; still needs real per-page content and a11y pass. **Correction:** the original "Tailwind wired" claim here was inaccurate — `tailwindcss` was a devDependency but the `@tailwindcss/vite` plugin was never installed or added to `vite.config.ts`'s `plugins` array, so no Tailwind utility classes were ever actually being generated. Every page, including `NavBar.tsx`, has been rendering completely unstyled since D1 landed. Fixed as of `dev-d/shared-primitives` (commit below): installed `@tailwindcss/vite`, added it to `vite.config.ts`. Verified with a screenshot of `/monitor` via headless Chromium — NavBar, page text, and all D3 components now render with correct token colors. |
-| D2 | Landing page (static) — hero, stat cards, CTA buttons | `[ ]` | |
+| D2 | Landing page (static) — hero, stat cards, CTA buttons | `[M]` | Hero with radial glow, 4 stat cards (font-mono numbers, Badge status), 4-step how-it-works grid, demo CTA banner, footer. Routed to /monitor and /negotiate. Token-compliant, no colored card backgrounds. |
 | D3 | Shared primitives (buttons/cards/badges) | `[M]` | Dev B (covering Dev D). Merged to `main` via `dev-d/shared-primitives`. Built `Button.tsx` (`variant?: 'primary' \| 'secondary'`), `Card.tsx` (`bg-surface border border-border rounded-lg p-6`, no colored backgrounds), `Badge.tsx` (`status: 'active' \| 'danger' \| 'warning' \| 'success'`, muted-bg + light-text pill per status) in `frontend/src/components/shared/`. Logged in `ui-registry.md` under a new "Shared Primitives" section with exact class recipes. Verified by temporarily wiring all three (plus all four badge statuses) into `/monitor`, screenshotting via headless Chromium, confirming correct dark-theme rendering with zero console errors, then removing the test block. |
 | D4 | Globe component (`components/globe/`) — one configurable component | `[M]` | Dev B (covering Dev D). Merged to `main` via `dev-d/globe-component`. `Globe.tsx` — single `react-globe.gl` instance driven by props (`trackedObjects`, `mode: 'live' \| 'conjunction' \| 'trajectory'`, optional `conjunctionAlert`), auto-sizes to its parent container via `ResizeObserver`. ECI→lat/lng/alt conversion in `eciToGeo.ts` via `satellite.js`. Colors match D3's `Badge` semantics (accent=active, danger=hazard, pulsing ring on the flagged pair in `'conjunction'` mode). **Currently running on 5 hand-written mock `TrackedObject`s in `globe/mockTrackedObjects.ts`**; these aren't fabricated numbers, each one's `position_km`/`velocity_kmps` came from actually SGP4-propagating a real TLE via `satellite.js` at a fixed timestamp, and a `TODO(Dev A)` comment marks the swap point. **Update:** Dev A's Phase 0 `TrackedObject` fixture has since landed at `backend/app/data/fixtures/tracked_objects.json` — the frontend isn't wired to consume it yet (still a separate follow-up task, not done as part of this row). `'trajectory'` mode is accepted but renders like `'live'` for now, pending Dev A's Phase 2 propagation arrays. Wired into `pages/Monitor.tsx` (`'live'` mode) with a floating legend `Card`. Along the way, fixed two toolchain issues that were blocking this: `three-globe`'s texture path isn't importable via its `exports` map (copied `earth-night.jpg` into `frontend/src/assets/` instead) and `satellite.js`'s WASM build needs `esnext` as the esbuild target (set in `vite.config.ts`'s `build.target` / `optimizeDeps.esbuildOptions.target`). Verified via headless-Chromium screenshot of `/monitor`: globe renders with the dark earth-night texture, satellite points visible, legend counts correct, zero console errors. Logged in `ui-registry.md`. **Follow-up fix (legend + hazard marker rendering):** the legend previously said a blanket "still mock" even once a live `conjunction_alert` was flowing — now shows satellite-position and conjunction-alert status independently (`Monitor.tsx`). Also fixed the hazard ring/marker looking jagged/scratchy in screenshots — two real causes, not an animation-timing illusion: (1) `ringColor` returned a flat opaque color instead of a function of the ring's progress `t`, and `ringRepeatPeriod` (800ms) was shorter than one ring's full lifetime (2000ms), so 2-3 solid-opacity ring generations overlapped at once; fixed by making `ringColor` fade with `t` and retiming so one ring fully fades before the next spawns. (2) `three-globe` renders each point as a `CylinderGeometry` pin with a default 12-sided cross-section (`pointResolution`), visibly faceted at this scale and further stretched by perspective near the globe's limb; fixed by setting `pointResolution={32}`. Verified in motion (not a single lucky frame) via 12 tightly-spaced (150ms) zoomed screenshots across one full ~1.6s pulse cycle — confirmed a single clean ring growing and fading, no overlap, smooth pin geometry throughout. |
 | D5 | `lib/websocket.ts` — connect, auto-reconnect, out-of-sequence discard, snapshot-on-reconnect | `[M]` | Dev B (covering Dev D). Merged to `main` via `dev-d/globe-fixes` (commit `7e9508b`). `useAegisSocket()` hook (named per `architecture.md`'s Client Pattern), mounted once in `App.tsx` so the connection outlives route changes. Connects to Dev B's real, live `/ws/monitor` (B3) — not just B1's echo stub. Enforces snapshot-first (anything else arriving before the first snapshot is logged as an error and dropped, per invariant 6); discards any message with `sequence <= last seen`; auto-reconnects forever at a fixed 2s interval — no retry cap — resetting sequence-tracking state on every fresh attempt so a stale socket's data can never be compared against the new one's — no assumed delta continuity, the fresh snapshot the backend always sends on connect is simply trusted. Every parsed message is handed to the store's `updateFromSocket`. **Correction:** the first pass set `connectionStatus` to `'disconnected'` on every failed attempt before scheduling the next retry, so during an outage the UI mostly showed `'disconnected'` and only flashed `'reconnecting'` for the brief instant before each retry — same visible effect as a demo-day "gave up" look, even without an actual retry cap. Fixed: `onclose` now sets `'reconnecting'` directly and keeps it there for the whole outage; `'disconnected'` is no longer reachable from the retry loop at all (kept in the type only for a possible future explicit/user-initiated disconnect). **Verified live end-to-end:** started uvicorn + Vite together, confirmed the globe picks up B3's real hardcoded `conjunction_alert` (switches to `'conjunction'` mode, hazard ring appears). Killed uvicorn mid-session and sampled `connectionStatus` once a second for 12s (6x the retry interval) — stayed on `Reconnecting` for all 12 samples, never once showed `Disconnected`; globe held its last-known state rather than freezing. Restarted uvicorn — NavBar recovered to `Live` and the alert reapplied from the fresh snapshot. All stages screenshotted via headless Chromium. |
@@ -199,19 +197,19 @@ _No checkpoint session has occurred yet._
 **Note:** Ownership shifts here per build-plan.md — Dev A moves from orbital physics into Trajectory/History, reusing their orbital-data expertise. This section will not become active until Checkpoint 1 passes.
 
 ### Workstream A — Trajectory Data & History Persistence
-**Owner:** Dev A (persistence half covered by Dev C)
-**Status:** In progress
+**Owner:** Dev A
+**Status:** All Workstream A tasks complete & verified (`[x]`) — db.py reconciled with Dev C's interface (backward-compat aliases added)
 **Depends on:** Dev B's `Resolution` schema (locked in Phase 0)
-**Next:** Before/after propagation arrays (Dev A)
+**Next:** Checkpoint 2 full integration
 
 | Task | Status | Notes |
 |---|---|---|
-| Before/after propagation arrays for maneuver preview | `[ ]` | Feeds Trajectory screen (owned by Dev A) |
-| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built by Dev C (covering persistence half): SQLite persistence matching `architecture.md` schema (`conjunctions`, `negotiation_messages`, `resolutions`), atomic `save_completed_session()`, and `get_history_sessions()` query for History table. Verified via `backend/scripts/test_db_persistence.py` and `backend/app/storage/tests/test_db.py`. |
+| Before/after propagation arrays for maneuver preview | `[x]` | Built in `backend/app/data/trajectory.py`. Uses J2-perturbed RK4 orbital equations of motion, impulsive delta-v burn mechanics (prograde, retrograde, radial, normal), synchronous scrubber timeline steps, and 3D globe polyline paths. Verified via `test_trajectory.py` (5/5 passing, energy drift < 1e-4, nominal 3.22 km -> maneuvered 12.74 km, threshold cleared). Static fixture generated at `backend/app/data/fixtures/trajectory_simulation.json`. Read-only API route `GET /api/trajectory/{conjunction_id}` added to `main.py`. |
+| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built in `backend/app/storage/db.py`. WAL mode, typed schema imports, dual-status history filter, rich JOIN query. Backward-compat aliases for Dev C's interface: `save_conjunction`, `save_completed_session`, `get_history_sessions`, `get_session_by_conjunction_id`. Verified via `storage/tests/test_db.py` (6/6 passing, foreign keys & atomic rollbacks verified). REST API routes `GET /api/history` and `GET /api/history/{conjunction_id}` added to `main.py`. |
 
 **Completion criteria:**
-- [ ] Before/after arrays validated against a known maneuver scenario
-- [x] SQLite writes/reads verified via script (`test_db_persistence.py`)
+- [x] Before/after arrays validated against a known maneuver scenario (`test_trajectory.py`)
+- [x] SQLite writes/reads verified via script (`storage/tests/test_db.py` & `main.py` REST API tests)
 
 ---
 
@@ -256,19 +254,19 @@ _No checkpoint session has occurred yet._
 ---
 
 ### Workstream D — Negotiation & Resolution UI
-**Owner:** Dev D (opportunistic pairing with A/B once their Phase 2 tasks land)
-**Status:** Not started (blocked until Checkpoint 1 passes)
-**Depends on:** Mock transcript/resolution fixtures (Phase 0), then Dev B/C's live events
-**Next:** Conjunction Details screen (mock-first)
+**Owner:** Dev D (opportunistic pairing with A/B once their Phase 2 tasks land) — Conjunction Details covered by Dev B while Dev D is tied up
+**Status:** All Phase 2 screens (Negotiation Console, Result Card, History Table, Trajectory Simulation) complete and wired.
+**Depends on:** Dev A backend for trajectory and history APIs (implemented).
+**Next:** Phase 3 Demo Hardening and end-to-end integration tests.
 
 | Task | Status | Notes |
 |---|---|---|
-| Conjunction Details screen | `[ ]` | Mock-first, then wired to real alert data (already flowing post-Checkpoint 1) |
-| Negotiation Console (two-column transcript, round-stage tracker) | `[ ]` | Mock transcript first, then Dev B's live events |
-| Negotiation Result screen | `[ ]` | Mock resolution first |
-| "No Safe Maneuver Found" state | `[ ]` | Explicit, honest UI treatment (invariant 9) |
-| History table (filterable) | `[ ]` | Wired to Dev A's `db.py` queries once available |
-| Trajectory Simulation screen (joint with Dev A) | `[ ]` | Reuses existing Globe component — no second globe (invariant 12) |
+| Conjunction Details screen | `[x]` | Dev B (covering Dev D). Not yet merged. Built directly against real live data in `pages/Negotiate.tsx` — skipped the mock-first step since real `activeConjunctionAlert`/`trackedObjects` were already flowing through `useNegotiationStore` by this point (Checkpoint-1-equivalent pieces already merged). Side-by-side satellite stat cards show real computed `Altitude`/`Velocity` (from `position_km`/`velocity_kmps`) plus `Operator`/`Fuel Δv margin`/`Mission priority`/`Maneuverability` as explicit `TBD` — those concepts exist backend-side (`OperatorProfile`) but aren't in any payload the frontend receives pre-negotiation, so TBD rather than fabricated. Conjunction Assessment card shows real `tca_utc`/`miss_distance_km`/`relative_velocity_kmps`, `Collision probability` as `TBD` (no such field in the schema). Built entirely from D3's `Button`/`Card`/`Badge`. **"Start Agent Negotiation" button** opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (via a new options-based variant of `useAegisSocket()` — see `lib/websocket.ts` in ui-registry.md's Data Layer section) and logs every envelope to console with a live count — **this is intentionally not the Negotiation Console yet**, just proof the trigger works end-to-end; the console/transcript UI is the next task. **Verified live** (not mocked): loaded `/negotiate` with the real backend running, confirmed real satellite names/NORAD IDs/computed altitude-velocity/TCA/miss-distance render (not mock fixture text); clicked the button and confirmed via headless-Chromium console capture that `snapshot` → 3× `negotiation_message` → `resolution` all arrived in order with correct sequence numbers, screenshotted before and after. |
+| Negotiation Console (two-column transcript, round-stage tracker) | `[x]` | Built in `NegotiationConsole.tsx`, wired in `Negotiate.tsx`. |
+| Negotiation Result screen | `[x]` | Built in `ResolutionCard.tsx` |
+| "No Safe Maneuver Found" state | `[x]` | Handled inherently in `ResolutionCard.tsx` (explicit title change and layout adaptation when isSuccess is false). |
+| History table (filterable) | `[x]` | Built in `pages/History.tsx`. Wired to Dev A's `db.py` via `/api/history` REST endpoint. |
+| Trajectory Simulation screen (joint with Dev A) | `[x]` | Built in `pages/Trajectory.tsx`. Reuses existing Globe component, adds timeline scrubber and mode="trajectory". Fetches from `/api/trajectory/:id`. |
 
 **Completion criteria:**
 - [ ] Every screen above demoable against mock data before being wired live

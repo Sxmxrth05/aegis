@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { ConjunctionAlert, TrackedObject } from '../components/globe/types';
+import type {
+  ConjunctionAlert,
+  TrackedObject,
+  NegotiationMessage,
+  Resolution,
+} from '../components/globe/types';
 
 /**
  * Mirrors the backend envelope contract in
@@ -22,20 +27,24 @@ export type WebSocketEnvelope<T = unknown> = {
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 /**
- * The backend's /ws/monitor snapshot payload doesn't carry trackedObjects
- * yet (only `{ conjunctions: [] }` today — Dev A/B haven't wired real
- * tracked-object state into the snapshot). Both fields are optional so this
- * type stays correct as that payload grows.
+ * Snapshot payload for /ws/monitor vs /ws/negotiation/{id}
  */
 type SnapshotPayload = {
   trackedObjects?: TrackedObject[];
   conjunctions?: ConjunctionAlert[];
+  messages?: NegotiationMessage[];
+  resolution?: Resolution | null;
 };
 
 type NegotiationState = {
   trackedObjects: TrackedObject[];
   activeConjunctionAlert: ConjunctionAlert | null;
   connectionStatus: ConnectionStatus;
+  
+  // Phase 2 fields
+  messages: NegotiationMessage[];
+  resolution: Resolution | null;
+  
   setConnectionStatus: (status: ConnectionStatus) => void;
   /**
    * The single funnel for all WebSocket message handling, per
@@ -49,6 +58,8 @@ export const useNegotiationStore = create<NegotiationState>((set) => ({
   trackedObjects: [],
   activeConjunctionAlert: null,
   connectionStatus: 'connecting',
+  messages: [],
+  resolution: null,
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
 
@@ -56,23 +67,31 @@ export const useNegotiationStore = create<NegotiationState>((set) => ({
     switch (envelope.type) {
       case 'snapshot': {
         const payload = envelope.payload as SnapshotPayload;
-        // Snapshot always replaces state wholesale — never patches — per
-        // architecture.md invariant 6 (no assumed delta continuity).
-        set({
-          trackedObjects: payload.trackedObjects ?? [],
-          activeConjunctionAlert: payload.conjunctions?.[0] ?? null,
-        });
+        // The snapshot might be from /ws/monitor OR /ws/negotiation/{id}.
+        // Only replace fields that are actually provided in this payload
+        // so we don't clobber the global monitor state with an empty
+        // negotiation snapshot.
+        set((state) => ({
+          trackedObjects: payload.trackedObjects !== undefined ? payload.trackedObjects : state.trackedObjects,
+          activeConjunctionAlert: payload.conjunctions !== undefined ? (payload.conjunctions[0] ?? null) : state.activeConjunctionAlert,
+          messages: payload.messages !== undefined ? payload.messages : state.messages,
+          resolution: payload.resolution !== undefined ? payload.resolution : state.resolution,
+        }));
         break;
       }
       case 'conjunction_alert': {
         set({ activeConjunctionAlert: envelope.payload as ConjunctionAlert });
         break;
       }
-      case 'negotiation_message':
-      case 'resolution':
-        // Phase 2's negotiation state machine / result UI will extend this
-        // store with the fields these need — no-op for now, not a bug.
+      case 'negotiation_message': {
+        const msg = envelope.payload as NegotiationMessage;
+        set((state) => ({ messages: [...state.messages, msg] }));
         break;
+      }
+      case 'resolution': {
+        set({ resolution: envelope.payload as Resolution });
+        break;
+      }
       case 'error':
         console.error('[useNegotiationStore] server error event:', envelope.payload);
         break;

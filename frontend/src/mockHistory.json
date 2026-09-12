@@ -1,0 +1,39 @@
+[
+  {
+    "conjunction_id": "3f2a9c1e-7b4d-4a6f-9e0c-1d8b5a3f2e6c",
+    "primary_id": "25544",
+    "secondary_id": "48274",
+    "tca_utc": "2026-01-14T06:12:00+00:00",
+    "initial_miss_distance_km": 3.22,
+    "relative_velocity_kmps": 14.5,
+    "conjunction_status": "resolved",
+    "alert_created_at": "2026-01-14T05:00:00+00:00",
+    "maneuvering_agent": "primary",
+    "maneuver_type": "prograde_burn",
+    "delta_v_mps": 5.4,
+    "execution_time_utc": "2026-01-14T05:47:00+00:00",
+    "post_maneuver_miss_distance_km": 12.74,
+    "resolution_status": "approved",
+    "rationale_text": "Safe distance achieved.",
+    "message_count": 4
+  },
+  {
+    "conjunction_id": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+    "primary_id": "12345",
+    "secondary_id": "99812",
+    "tca_utc": "2026-01-15T12:00:00+00:00",
+    "initial_miss_distance_km": 1.1,
+    "relative_velocity_kmps": 10.1,
+    "conjunction_status": "escalated",
+    "alert_created_at": "2026-01-15T11:00:00+00:00",
+    "maneuvering_agent": null,
+    "maneuver_type": null,
+    "delta_v_mps": null,
+    "execution_time_utc": null,
+    "post_maneuver_miss_distance_km": null,
+    "resolution_status": "no_safe_maneuver_found",
+    "rationale_text": "Failed to find any viable maneuver.",
+    "message_count": 2
+  }
+]
+
