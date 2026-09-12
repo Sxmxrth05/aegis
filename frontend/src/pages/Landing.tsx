@@ -1,167 +1,170 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
+import { LandingGlobe } from '../components/globe/LandingGlobe';
 
-const TELEMETRY = [
-  { value: '27,000+', label: 'catalogued objects', detail: 'active spacecraft + debris' },
-  { value: '~1,400', label: 'weekly approaches', detail: 'screened across LEO' },
-  { value: '05.000 km', label: 'alert threshold', detail: 'deterministic trigger' },
-  { value: '06 h', label: 'validation horizon', detail: 'secondary-risk sweep' },
+/* -- cards data ------------------------------------------- */
+const CARDS = [
+  { id: 'fleet', tag: 'PRIORITY QUEUE', meta: '2 / 5 ACTIVE',   title: 'ISS - CSS',             sub: 'CONJUNCTION ALERT',    badge: { label: 'DANGER', tone: 'danger'  as const }, detail: 'TCA in 04h 22m',   value: '3.202 km miss'   },
+  { id: 'neg',   tag: 'NEXT ACTION',    meta: 'ETA 00H 48M',    title: 'Operator Negotiation',  sub: 'MANEUVER COST CALC',   badge: { label: 'ARMED',  tone: 'warning' as const }, detail: 'dv budget ok',     value: '1.8 m/s estimate'},
+  { id: 'scan',  tag: 'SYSTEM SCAN',    meta: 'LIVE',            title: 'SGP4 Propagator',       sub: 'TLE REFRESH NOMINAL',  badge: { label: 'ONLINE', tone: 'success' as const }, detail: 'Pairs screened',   value: '412 this cycle'  },
+  { id: 'val',   tag: 'RESOLUTION LOG', meta: 'UPCOMING',        title: 'Validation Gate',       sub: '6H SWEEP PENDING',     badge: { label: 'GATED',  tone: 'warning' as const }, detail: 'Safety check',     value: 'pending sign-off'},
 ];
 
-const PIPELINE = [
-  {
-    code: 'MON',
-    state: 'ACTIVE',
-    title: 'Conjunction monitor',
-    detail: 'CelesTrak TLE → SGP4 propagation → pairwise screen',
-    output: 'ConjunctionAlert',
-  },
-  {
-    code: 'NEG',
-    state: 'ARMED',
-    title: 'Operator negotiation',
-    detail: 'Mission value + fuel margin + maneuver cost',
-    output: 'NegotiationMessage',
-  },
-  {
-    code: 'VAL',
-    state: 'GATED',
-    title: 'Safety validation',
-    detail: 'Six-hour propagation against the tracked set',
-    output: 'approve / reject',
-  },
-  {
-    code: 'RES',
-    state: 'READY',
-    title: 'Resolution record',
-    detail: 'Maneuver, Δv, execution UTC, residual risk',
-    output: 'Resolution',
-  },
-];
+type Tone = 'success' | 'warning' | 'danger';
 
-function StatusMark({ tone = 'success' }: { tone?: 'success' | 'warning' | 'danger' }) {
-  const color = {
-    success: 'bg-success shadow-[0_0_8px_var(--color-success)]',
-    warning: 'bg-warning shadow-[0_0_8px_var(--color-warning)]',
-    danger: 'bg-danger shadow-[0_0_8px_var(--color-danger)]',
-  }[tone];
+function StatusDot({ tone = 'success' }: { tone?: Tone }) {
+  const cls: Record<Tone, string> = {
+    success: 'bg-success shadow-[0_0_6px_var(--color-success)]',
+    warning: 'bg-warning shadow-[0_0_6px_var(--color-warning)]',
+    danger:  'bg-danger  shadow-[0_0_6px_var(--color-danger)]',
+  };
+  return <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full ${cls[tone]}`} />;
+}
 
-  return <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 ${color}`} />;
+function Badge({ label, tone }: { label: string; tone: Tone }) {
+  const cls: Record<Tone, string> = {
+    success: 'border-success/30 bg-success-muted/60 text-success-light',
+    warning: 'border-warning/30 bg-warning-muted/60 text-warning-light',
+    danger:  'border-danger/30  bg-danger-muted/60  text-danger-light',
+  };
+  return (
+    <span className={`flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider ${cls[tone]}`}>
+      <StatusDot tone={tone} /> {label}
+    </span>
+  );
 }
 
 export default function Landing() {
   return (
-    <main className="ops-grid min-h-screen bg-background text-text-primary">
-      <section className="border-b border-border">
-        <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
-          <div className="relative overflow-hidden border-border px-6 py-14 sm:px-8 lg:border-r lg:px-12 lg:py-20">
-            <div className="scan-beam" aria-hidden="true" />
-            <div className="relative z-10 max-w-4xl">
-              <div className="mb-10 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                <span className="flex items-center gap-2 text-success-light">
-                  <StatusMark /> node online
-                </span>
-                <span>AEGIS / OPS-01</span>
-                <span>UTC synchronized</span>
-              </div>
+    <main className="ops-grid min-h-screen bg-background text-text-primary overflow-x-hidden">
 
-              <p className="mb-3 font-mono text-xs uppercase tracking-[0.24em] text-accent-light">
-                autonomous orbital deconfliction
-              </p>
-              <h1 className="max-w-4xl text-balance text-[clamp(3rem,7vw,6.8rem)] font-semibold uppercase leading-[0.86] tracking-[-0.055em]">
-                Traffic conflict.
-                <span className="mt-2 block text-text-secondary">Resolution computed.</span>
-              </h1>
+      {/* ── HERO ──────────────────────────────────────── */}
+      <section
+        className="relative border-b border-border overflow-hidden"
+        style={{ minHeight: 'clamp(560px,82vh,860px)' }}
+      >
+        <div className="scan-beam" aria-hidden="true" />
 
-              <div className="mt-10 grid max-w-3xl gap-8 border-l border-accent pl-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <p className="max-w-[62ch] text-sm leading-6 text-text-secondary sm:text-base">
-                  Aegis detects close approaches, assigns maneuver responsibility through deterministic
-                  cost functions, and validates the resulting trajectory before a plan is released.
-                  Language models explain the record; they never produce safety-critical numbers.
-                </p>
-                <div className="flex items-center gap-3">
-                  <Link
-                    to="/monitor"
-                    className="bg-accent px-5 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-white transition duration-200 hover:bg-accent-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:translate-y-px"
-                  >
-                    Open monitor ↗
-                  </Link>
-                  <Link
-                    to="/negotiate"
-                    className="border-b border-border-light px-1 py-3 font-mono text-xs uppercase tracking-wider text-text-secondary transition duration-200 hover:border-accent hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
-                  >
-                    View ledger
-                  </Link>
-                </div>
-              </div>
-            </div>
+        {/* LEFT copy */}
+        <div
+          className="relative z-10 flex h-full flex-col justify-center px-6 pt-16 pb-10 sm:px-10 lg:px-14 lg:pt-20 lg:pb-14"
+          style={{ maxWidth: '50%', minHeight: 'inherit' }}
+        >
+          {/* status row */}
+          <div className="mb-8 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
+            <span className="flex items-center gap-2 border border-success/25 bg-success-muted/40 px-2.5 py-1 text-success-light">
+              <StatusDot tone="success" /> System Status&nbsp;&middot;&nbsp;Nominal
+            </span>
+            <span>AEGIS / OPS-01</span>
+            <span>UTC synchronized</span>
           </div>
 
-          <aside className="relative bg-surface-muted/80 px-6 py-8 sm:px-8 lg:px-7 lg:py-10" aria-label="Active conjunction snapshot">
-            <div className="flex items-start justify-between border-b border-border pb-4">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">Priority queue / 01</p>
-                <h2 className="mt-2 text-lg font-semibold">Active conjunction</h2>
-              </div>
-              <span className="flex items-center gap-2 border border-danger/30 bg-danger-muted/50 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-danger-light">
-                <StatusMark tone="danger" /> alerted
-              </span>
-            </div>
+          {/* headline */}
+          <h1
+            className="font-sans font-bold uppercase leading-[0.88] tracking-[-0.04em]"
+            style={{ fontSize: 'clamp(3.2rem,8vw,7.4rem)' }}
+          >
+            <span className="block text-text-primary">Detect.</span>
+            <span className="block text-text-primary">Negotiate.</span>
+            <span
+              className="block text-accent-light"
+              style={{ textShadow: '0 0 48px rgba(96,165,250,0.35)' }}
+            >
+              Resolve.
+            </span>
+          </h1>
 
-            <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">Primary / 25544</p>
-                <p className="mt-1 text-xl font-semibold">ISS</p>
-                <p className="text-xs text-text-secondary">ZARYA</p>
-              </div>
-              <div className="relative h-px w-14 bg-danger/50">
-                <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border border-danger bg-background" />
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">Secondary / 48274</p>
-                <p className="mt-1 text-xl font-semibold">CSS</p>
-                <p className="text-xs text-text-secondary">TIANHE</p>
-              </div>
-            </div>
+          {/* body */}
+          <p className="mt-8 max-w-[52ch] text-sm leading-[1.75] text-text-secondary sm:text-base">
+            Aegis screens every close approach in low Earth orbit, assigns maneuver
+            responsibility through deterministic cost functions, and validates the
+            resulting trajectory before a plan is released.
+          </p>
 
-            <dl className="mt-8 divide-y divide-border-muted border-y border-border">
-              <div className="grid grid-cols-2 py-3">
-                <dt className="text-xs text-text-muted">Predicted miss</dt>
-                <dd className="text-right font-mono text-sm font-semibold text-danger-light">3.202 km</dd>
-              </div>
-              <div className="grid grid-cols-2 py-3">
-                <dt className="text-xs text-text-muted">Relative velocity</dt>
-                <dd className="text-right font-mono text-sm text-text-primary">9.052 km/s</dd>
-              </div>
-              <div className="grid grid-cols-2 py-3">
-                <dt className="text-xs text-text-muted">Decision source</dt>
-                <dd className="text-right font-mono text-[11px] uppercase text-success-light">Python / deterministic</dd>
-              </div>
-            </dl>
+          {/* CTAs */}
+          <div className="mt-9 flex flex-wrap items-center gap-4">
+            <button
+              aria-label="Play demo"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border-light bg-surface-secondary text-text-secondary transition hover:border-accent hover:text-accent-light"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 translate-x-0.5">
+                <path d="M5 3.5l8 4.5-8 4.5V3.5z" />
+              </svg>
+            </button>
 
-            <div className="mt-7 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-text-muted">
-              <span>cached scenario ready</span>
-              <span className="text-warning-light">awaiting operator trigger</span>
+            <Link
+              to="/monitor"
+              className="flex items-center gap-2 bg-accent px-5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-white transition duration-200 hover:bg-accent-dark active:translate-y-px"
+            >
+              Open Monitor
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5">
+                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+
+            <Link
+              to="/negotiate"
+              className="border-b border-border-light px-1 py-2.5 font-mono text-[11px] uppercase tracking-wider text-text-secondary transition hover:border-accent hover:text-text-primary"
+            >
+              View negotiation ledger +
+            </Link>
+          </div>
+        </div>
+
+        {/* GLOBE — full right half, absolute positioned */}
+        <div
+          className="absolute right-0 top-0 bottom-0"
+          style={{ left: '46%' }}
+          aria-hidden="true"
+        >
+          {/* HUD label overlay */}
+          <div
+            className="absolute z-10 font-mono text-[9px] uppercase tracking-widest pointer-events-none"
+            style={{ top: '18%', right: '6%' }}
+          >
+            <div className="border border-border-light bg-surface/80 px-2.5 py-1.5 backdrop-blur-sm">
+              <div className="text-text-muted">Target</div>
+              <div className="mt-0.5 font-semibold text-text-primary">ISS / CSS</div>
+              <div className="text-danger-light">Miss: 3.202 km</div>
             </div>
-          </aside>
+            <div className="mt-1 ml-auto h-px w-10 bg-border-light" />
+          </div>
+
+          <LandingGlobe />
         </div>
       </section>
 
-      <section className="border-b border-border bg-surface/55" aria-label="System telemetry">
-        <dl className="mx-auto grid max-w-[1440px] grid-cols-2 lg:grid-cols-4">
-          {TELEMETRY.map((item, index) => (
-            <div
-              key={item.label}
-              className={`px-6 py-5 sm:px-8 ${index % 2 !== 0 ? 'border-l border-border' : ''} ${index > 1 ? 'border-t border-border lg:border-t-0' : ''} ${index > 0 ? 'lg:border-l lg:border-border' : ''}`}
-            >
-              <dd className="font-mono text-xl font-medium tabular-nums text-text-primary">{item.value}</dd>
-              <dt className="mt-1 text-xs font-medium text-text-secondary">{item.label}</dt>
-              <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-text-muted">{item.detail}</p>
+      {/* ── BOTTOM CARDS ──────────────────────────────── */}
+      <section
+        className="mx-auto w-full max-w-[1440px] grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border-x border-b border-border"
+        aria-label="Mission overview"
+      >
+        {CARDS.map((card, i) => (
+          <div
+            key={card.id}
+            className={`group relative flex flex-col gap-3 p-5 sm:p-6 transition-colors duration-200 hover:bg-surface-secondary/30 ${i > 0 ? 'border-l border-border' : ''}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-text-muted">{card.tag}</p>
+                <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-accent-light">{card.meta}</p>
+              </div>
+              <Badge label={card.badge.label} tone={card.badge.tone} />
             </div>
-          ))}
-        </dl>
+            <div>
+              <h3 className="text-base font-semibold leading-tight text-text-primary">{card.title}</h3>
+              <p className="mt-0.5 font-mono text-[9px] uppercase tracking-widest text-text-muted">{card.sub}</p>
+            </div>
+            <div className="mt-auto flex items-end justify-between border-t border-border pt-3">
+              <span className="font-mono text-[10px] text-text-muted">{card.detail}</span>
+              <span className="font-mono text-xs font-medium text-text-primary">{card.value}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 h-[2px] w-0 bg-accent transition-all duration-300 group-hover:w-full" />
+          </div>
+        ))}
       </section>
 
-      <section className="mx-auto grid max-w-[1440px] border-x border-border lg:grid-cols-[0.92fr_1.35fr_0.73fr]">
+      {/* ── PIPELINE ──────────────────────────────────── */}
+      <section className="mx-auto max-w-[1440px] border-x border-b border-border lg:grid lg:grid-cols-[0.92fr_1.35fr_0.73fr]">
         <div className="border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-light">Execution chain</p>
           <h2 className="mt-3 max-w-sm text-3xl font-semibold leading-tight tracking-tight">
@@ -174,7 +177,12 @@ export default function Landing() {
         </div>
 
         <ol className="divide-y divide-border">
-          {PIPELINE.map((step, index) => (
+          {([
+            { code: 'MON', state: 'ACTIVE', tone: 'success' as Tone, title: 'Conjunction monitor',  detail: 'CelesTrak TLE -> SGP4 propagation -> pairwise screen', output: 'ConjunctionAlert'    },
+            { code: 'NEG', state: 'ARMED',  tone: 'success' as Tone, title: 'Operator negotiation', detail: 'Mission value + fuel margin + maneuver cost',            output: 'NegotiationMessage' },
+            { code: 'VAL', state: 'GATED',  tone: 'warning' as Tone, title: 'Safety validation',    detail: 'Six-hour propagation against the tracked set',            output: 'approve / reject'   },
+            { code: 'RES', state: 'READY',  tone: 'success' as Tone, title: 'Resolution record',    detail: 'Maneuver, delta-v, execution UTC, residual risk',          output: 'Resolution'         },
+          ]).map((step, index) => (
             <li key={step.code} className="group grid grid-cols-[3.5rem_minmax(0,1fr)_auto] gap-4 px-6 py-5 transition-colors duration-200 hover:bg-surface-secondary/45 sm:px-8">
               <div className="font-mono text-xs text-text-muted">
                 <span className="block text-accent-light">{step.code}</span>
@@ -182,7 +190,7 @@ export default function Landing() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <StatusMark tone={index === 2 ? 'warning' : 'success'} />
+                  <StatusDot tone={step.tone} />
                   <h3 className="text-sm font-semibold text-text-primary">{step.title}</h3>
                 </div>
                 <p className="mt-1.5 text-xs leading-5 text-text-secondary">{step.detail}</p>
@@ -215,15 +223,16 @@ export default function Landing() {
             to="/negotiate"
             className="mt-10 inline-flex items-center gap-3 border-t border-border-light pt-4 font-mono text-xs uppercase tracking-wider text-text-primary transition-colors hover:text-accent-light focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
           >
-            Inspect negotiation record <span aria-hidden="true">→</span>
+            Inspect negotiation record <span aria-hidden="true">-&gt;</span>
           </Link>
         </aside>
       </section>
 
+      {/* ── FOOTER ────────────────────────────────────── */}
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-6 py-5 font-mono text-[9px] uppercase tracking-wider text-text-muted sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <span>Aegis orbital safety demonstrator / CelesTrak + SGP4</span>
-          <span>Δv · miss distance · yield score — deterministic sources only</span>
+          <span>delta-v &middot; miss distance &middot; yield score - deterministic sources only</span>
         </div>
       </footer>
     </main>
