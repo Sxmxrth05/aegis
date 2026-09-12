@@ -59,17 +59,43 @@ except ImportError:
     )
     from app.schemas.tracked_object import TrackedObject
 
-from backend.app.agents.cost_functions import (
-    compute_yield_score,
-    pick_maneuvering_agent,
-    compute_delta_v_cost,
-)
-from backend.app.agents.operator_agent import AgentState, get_agent_justification
-from backend.app.agents.validation_agent import (
-    ProposedManeuver,
-    ValidationResult,
-    run_validation_check,
-)
+try:
+    from backend.app.agents.cost_functions import (
+        compute_yield_score,
+        pick_maneuvering_agent,
+        compute_delta_v_cost,
+    )
+    from backend.app.agents.operator_agent import AgentState, get_agent_justification
+    from backend.app.agents.validation_agent import (
+        ProposedManeuver,
+        ValidationResult,
+        run_validation_check,
+    )
+except ImportError:
+    try:
+        from app.agents.cost_functions import (
+            compute_yield_score,
+            pick_maneuvering_agent,
+            compute_delta_v_cost,
+        )
+        from app.agents.operator_agent import AgentState, get_agent_justification
+        from app.agents.validation_agent import (
+            ProposedManeuver,
+            ValidationResult,
+            run_validation_check,
+        )
+    except ImportError:
+        from cost_functions import (
+            compute_yield_score,
+            pick_maneuvering_agent,
+            compute_delta_v_cost,
+        )
+        from operator_agent import AgentState, get_agent_justification
+        from validation_agent import (
+            ProposedManeuver,
+            ValidationResult,
+            run_validation_check,
+        )
 
 logger = logging.getLogger("[negotiator]")
 

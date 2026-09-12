@@ -22,7 +22,13 @@ from typing import Callable, Literal, TypedDict
 
 from pydantic import BaseModel
 
-from backend.app.agents.cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
+try:
+    from backend.app.agents.cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
+except ImportError:
+    try:
+        from app.agents.cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
+    except ImportError:
+        from cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
 
 try:
     from backend.app.agents.monitor_agent import build_satellite, propagate, PropagationError

@@ -21,7 +21,13 @@ from typing import TypedDict
 import anthropic
 from pydantic import BaseModel, field_validator
 
-from backend.app.agents.cost_functions import compute_yield_score
+try:
+    from backend.app.agents.cost_functions import compute_yield_score
+except ImportError:
+    try:
+        from app.agents.cost_functions import compute_yield_score
+    except ImportError:
+        from cost_functions import compute_yield_score
 
 logger = logging.getLogger("[operator_agent]")
 
