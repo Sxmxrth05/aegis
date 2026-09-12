@@ -13,26 +13,31 @@ Ownership: Dev C only. Do not add LLM/network calls to this module.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Shared constants (single source of truth for the whole backend)
-# Dev B will eventually own a shared constants module; until that lands,
-# these live here and are re-exported. If Dev B creates constants.py, move
-# these there and import from it.
+# SHARED CONSTANTS
+# Dev B is the single owner of backend/app/constants.py. We import from there,
+# with fallback definitions so unit tests remain fully runnable standalone.
 # ---------------------------------------------------------------------------
 
-CONJUNCTION_THRESHOLD_KM: float = 5.0
-"""Miss distance below which a conjunction triggers an alert."""
-
-HYSTERESIS_CLEAR_KM: float = 4.0
-"""Miss distance that must be reached post-maneuver to mark an alert cleared.
-Deliberately lower than threshold to prevent alert flicker near the boundary."""
-
-MAX_NEGOTIATION_ROUNDS: int = 3
-"""Hard cap on negotiation rounds. Non-convergence at round cap triggers the
-deterministic tie-break rule, never an infinite loop (invariant 4)."""
-
-VALIDATION_LOOKAHEAD_HOURS: float = 6.0
-"""Hours ahead the Validation Agent re-propagates to check for secondary risks
-created by the proposed maneuver."""
+try:
+    from backend.app.constants import (
+        CONJUNCTION_THRESHOLD_KM,
+        HYSTERESIS_CLEAR_KM,
+        MAX_NEGOTIATION_ROUNDS,
+        VALIDATION_LOOKAHEAD_HOURS,
+    )
+except ImportError:
+    try:
+        from app.constants import (
+            CONJUNCTION_THRESHOLD_KM,
+            HYSTERESIS_CLEAR_KM,
+            MAX_NEGOTIATION_ROUNDS,
+            VALIDATION_LOOKAHEAD_HOURS,
+        )
+    except ImportError:
+        CONJUNCTION_THRESHOLD_KM: float = 5.0
+        HYSTERESIS_CLEAR_KM: float = 4.0
+        MAX_NEGOTIATION_ROUNDS: int = 3
+        VALIDATION_LOOKAHEAD_HOURS: float = 6.0
 
 # ---------------------------------------------------------------------------
 # Internal weights (tunable, but not agent-visible — judges can trace these)

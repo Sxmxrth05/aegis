@@ -115,6 +115,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 **Waiting on:** Dev A's real `propagate()` (stub in place; DI pattern ready for swap)
 **Next:** Await Checkpoint 1 merge session; then wire into live orchestrator (Phase 2 C tasks)
 **Merge status:** Ready to merge on branch `dev-c`
+**Notes:** Next.js scaffold removed from root as out-of-scope for Dev C (frontend owned by Dev D with React+Vite). Explicit ACK given on Dev B's `backend/app/constants.py` as single source of truth for shared constants.
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
