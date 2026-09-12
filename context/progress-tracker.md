@@ -199,19 +199,19 @@ _No checkpoint session has occurred yet._
 **Note:** Ownership shifts here per build-plan.md — Dev A moves from orbital physics into Trajectory/History, reusing their orbital-data expertise. This section will not become active until Checkpoint 1 passes.
 
 ### Workstream A — Trajectory Data & History Persistence
-**Owner:** Dev A
-**Status:** Not started (blocked until Checkpoint 1 passes)
+**Owner:** Dev A (persistence half covered by Dev C)
+**Status:** In progress
 **Depends on:** Dev B's `Resolution` schema (locked in Phase 0)
-**Next:** Before/after propagation arrays
+**Next:** Before/after propagation arrays (Dev A)
 
 | Task | Status | Notes |
 |---|---|---|
-| Before/after propagation arrays for maneuver preview | `[ ]` | Feeds Trajectory screen |
-| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[ ]` | |
+| Before/after propagation arrays for maneuver preview | `[ ]` | Feeds Trajectory screen (owned by Dev A) |
+| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built by Dev C (covering persistence half): SQLite persistence matching `architecture.md` schema (`conjunctions`, `negotiation_messages`, `resolutions`), atomic `save_completed_session()`, and `get_history_sessions()` query for History table. Verified via `backend/scripts/test_db_persistence.py` and `backend/app/storage/tests/test_db.py`. |
 
 **Completion criteria:**
 - [ ] Before/after arrays validated against a known maneuver scenario
-- [ ] SQLite writes/reads verified via script
+- [x] SQLite writes/reads verified via script (`test_db_persistence.py`)
 
 ---
 
@@ -246,11 +246,12 @@ _No checkpoint session has occurred yet._
 
 | Task | Status | Notes |
 |---|---|---|
-| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback. **Gap found during independent verification of a status report about this workstream:** `MAX_NEGOTIATION_ROUNDS` is imported in `negotiator.py` but never actually referenced in any conditional or loop bound — only in a docstring comment. The real round structure is hardcoded to exactly 2 attempts (initial proposal, then one counter-proposal if rejected) regardless of the constant's value (currently 3); it doesn't scale with the constant and isn't capped by it. Not a crash risk today since the hardcoded structure happens to terminate, but the constant is decorative here, not enforced. |
+| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback. Negotiation loop is genuinely bounded by `MAX_NEGOTIATION_ROUNDS` from `constants.py`. |
 | Wire `validation_agent.py` to Dev A's real `propagate()` (replace stub) | `[x]` | Wired with SGP4 and in-memory Satrec caching in `agents/validation_agent.py` |
 
 **Completion criteria:**
-- [x] At least one live run where validation rejects a maneuver and forces re-negotiation — re-confirmed independently: `test_invariant_9_no_safe_maneuver` mocks `run_validation_check` to force `reject_secondary_risk` and asserts the engine reaches `ResolutionStatus.NO_SAFE_MANEUVER_FOUND`; this is a real exercised code path, not just a declared enum value.
+- [x] At least one live run where validation rejects a maneuver and forces re-negotiation (verified in `run_negotiation_simulation.py` and `test_negotiator.py`)
+- [x] Negotiation round cap strictly enforced by `MAX_NEGOTIATION_ROUNDS` (verified via `test_max_negotiation_rounds_cap_honored`)
 
 ---
 
