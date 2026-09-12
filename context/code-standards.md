@@ -6,8 +6,8 @@ Engineering conventions for Aegis, covering both the FastAPI backend (Python) an
 
 ## Engineering Mindset
 
-- Read the relevant context file (`architecture.md`, `ui-tokens.md`/`ui-rules.md`) before starting a new feature.
-- Build one feature at a time per `build-plan.md`; verify it works before moving to the next.
+- Read the relevant context file (`architecture.md`, `ui-tokens.md`/`ui-rules.md`) before starting a new task.
+- Work within your own workstream per `build-plan.md` and the ownership map below; verify each task against its own completion criteria before moving to the next, and don't merge past a Checkpoint until the team has verified it together.
 - Keep physics/negotiation math in small, pure, testable functions (`cost_functions.py`) — never buried inside LLM prompts or route handlers.
 - Prefer clean and readable over clever — this code needs to survive live debugging at 2am.
 - When something breaks, fix the root cause once rather than patching around it repeatedly.
@@ -66,6 +66,25 @@ export function ConjunctionDetails({ conjunctionId }: Props) {
 
 - Backend: `snake_case.py` for files, `PascalCase` for Pydantic models/classes.
 - Frontend: `PascalCase.tsx` for components, `camelCase.ts` for hooks/utilities, folders in `kebab-case` where they contain multiple related files.
+
+---
+
+## File & Folder Ownership
+
+Aegis is built by four developers working in parallel on separate directory boundaries (see `build-plan.md` §Git & Merge Strategy for the full rationale). Don't edit another developer's owned files directly — flag a needed change to them instead. This keeps merge conflicts near zero since ownership lines up with directory lines.
+
+| Path | Owner | Workstream |
+|---|---|---|
+| `backend/app/data/`, `backend/app/agents/monitor_agent.py` | Dev A | Orbital Physics & Conjunction Detection (Phase 1) → Trajectory Data & History Persistence (Phase 2) |
+| `backend/app/main.py`, `backend/app/orchestrator/`, `backend/app/schemas/` | Dev B | Orchestrator, Schemas & Realtime Backbone (Phase 1) → Negotiation State Machine (Phase 2) |
+| `backend/app/agents/cost_functions.py`, `backend/app/agents/operator_agent.py`, `backend/app/agents/validation_agent.py` | Dev C | Agent Intelligence: Cost, Narration & Validation (Phase 1) → Live Narration & Validation (Phase 2) |
+| `frontend/src/` (all of it) | Dev D | Frontend Experience & WebSocket Client (Phase 1) → Negotiation & Resolution UI (Phase 2) |
+
+**Controlled shared files** — single-owner edits; anyone else requests a change rather than editing directly:
+- Pydantic schemas and shared constants → Dev B is the only merger
+- `ui-registry.md`, `ui-tokens.md` → append-only, updated by whoever builds the component
+- `AGENTS.md`, `progress-tracker.md` → each developer updates only their own workstream's rows/sections; pull-and-rebase before pushing to avoid clobbering a teammate's edit
+- `backend/requirements.txt` / `frontend/package.json` → announce a new dependency before adding it (see §Dependencies below), then whoever's blocked on it merges it
 
 ---
 
