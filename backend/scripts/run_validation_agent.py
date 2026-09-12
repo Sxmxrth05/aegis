@@ -93,7 +93,7 @@ def main() -> None:
     )
     _print_result("No maneuver needed (expected: approved_no_action)", result_1)
     assert result_1.outcome == "approved_no_action", f"Unexpected: {result_1.outcome}"
-    print("  ✓ Assertion passed")
+    print("  [PASS] Assertion passed")
 
     # --- Scenario 2: Full lookahead scan -> approve ---
     # Use a stub that places every object 1000+ km from the maneuvering satellite,

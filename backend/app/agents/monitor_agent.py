@@ -63,14 +63,9 @@ except ImportError:
             status: ConjunctionStatus
             created_at: str
 
-        class TrackedObject(BaseModel):  # type: ignore[no-redef]
-            norad_id: str
-            name: str
-            tle_line1: str
-            tle_line2: str
-            timestamp_utc: str
-            position_km: tuple[float, float, float]
-            velocity_kmps: tuple[float, float, float]
+        # No local TrackedObject fallback here — schemas.tracked_object.TrackedObject
+        # is the single canonical definition; if both import paths above fail, this
+        # module should error loudly (NameError) rather than silently duplicate it.
 
 
 # Backward compatibility alias

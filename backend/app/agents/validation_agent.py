@@ -18,11 +18,16 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Literal, TypedDict
+from typing import Callable, Literal
 
 from pydantic import BaseModel
 
 from backend.app.agents.cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
+
+try:
+    from backend.app.schemas.tracked_object import TrackedObject
+except ImportError:
+    from app.schemas.tracked_object import TrackedObject
 
 try:
     from backend.app.agents.monitor_agent import build_satellite, propagate, PropagationError
@@ -61,12 +66,32 @@ Three valid outcomes per architecture.md §Data Flow step 8:
 """
 
 
-class TrackedObject(TypedDict):
-    """Minimal shape of a tracked object used by the validation agent."""
-    norad_id: str
-    name: str
-    tle_line1: str
-    tle_line2: str
+_TRACKED_OBJECT_STATE_PLACEHOLDERS = {
+    "timestamp_utc": "1970-01-01T00:00:00Z",
+    "position_km": (0.0, 0.0, 0.0),
+    "velocity_kmps": (0.0, 0.0, 0.0),
+}
+"""
+run_validation_check() only ever reads a tracked object's TLE identity
+fields (norad_id/name/tle_line1/tle_line2) and re-propagates fresh via
+propagate_fn — it never reads position_km/velocity_kmps/timestamp_utc off
+the object itself. These placeholders let a caller pass a minimal
+dict (just the TLE fields) through _as_tracked_object() without needing
+to fabricate state it doesn't have.
+"""
+
+
+def _as_tracked_object(obj: TrackedObject | dict) -> TrackedObject:
+    """
+    Normalize a tracked-object-shaped input to the canonical Pydantic
+    TrackedObject (schemas.tracked_object) so downstream code can use
+    attribute access uniformly. Accepts either a real TrackedObject or a
+    plain dict (e.g. this module's own standalone-script fixtures, or
+    negotiator.py's pre-existing dict-based state).
+    """
+    if isinstance(obj, TrackedObject):
+        return obj
+    return TrackedObject(**{**_TRACKED_OBJECT_STATE_PLACEHOLDERS, **obj})
 
 
 class ProposedManeuver(BaseModel):
@@ -171,9 +196,9 @@ def _stub_propagate(
 
 def run_validation_check(
     proposed_maneuver: ProposedManeuver | dict,
-    primary_object: TrackedObject,
-    secondary_object: TrackedObject,
-    all_tracked_objects: list[TrackedObject],
+    primary_object: TrackedObject | dict,
+    secondary_object: TrackedObject | dict,
+    all_tracked_objects: list[TrackedObject | dict],
     *,
     propagate_fn: PropagateFn | None = None,
     lookahead_hours: float = VALIDATION_LOOKAHEAD_HOURS,
@@ -191,11 +216,11 @@ def run_validation_check(
     ----------
     proposed_maneuver : ProposedManeuver | dict
         The proposed maneuver from the operator agent convergence.
-    primary_object : TrackedObject
+    primary_object : TrackedObject | dict
         The maneuvering satellite.
-    secondary_object : TrackedObject
+    secondary_object : TrackedObject | dict
         The counterpart satellite.
-    all_tracked_objects : list[TrackedObject]
+    all_tracked_objects : list[TrackedObject | dict]
         Full curated tracked set (including primary and secondary).
         The maneuvering satellite's post-maneuver TLE is used; all others
         use their current TLE. For the MVP, "applied maneuver" is approximated
@@ -218,6 +243,10 @@ def run_validation_check(
     """
     if isinstance(proposed_maneuver, dict):
         proposed_maneuver = ProposedManeuver(**proposed_maneuver)
+
+    primary_object = _as_tracked_object(primary_object)
+    secondary_object = _as_tracked_object(secondary_object)
+    all_tracked_objects = [_as_tracked_object(obj) for obj in all_tracked_objects]
 
     if propagate_fn is None:
         propagate_fn = real_sgp4_propagate if build_satellite is not None else _stub_propagate
@@ -258,7 +287,7 @@ def run_validation_check(
     maneuvering_norad = proposed_maneuver.maneuvering_norad_id
     other_objects = [
         obj for obj in all_tracked_objects
-        if obj["norad_id"] != maneuvering_norad
+        if obj.norad_id != maneuvering_norad
     ]
 
     # Find the maneuvering satellite's TLE
@@ -289,8 +318,8 @@ def run_validation_check(
             # NOTE: In Phase 1 (stub), this returns a fixed position.
             # Post-Checkpoint 1: Dev A's real propagate() is injected here.
             man_pos, _ = propagate_fn(
-                maneuvering_obj["tle_line1"],
-                maneuvering_obj["tle_line2"],
+                maneuvering_obj.tle_line1,
+                maneuvering_obj.tle_line2,
                 t,
             )
         except Exception as exc:  # noqa: BLE001
@@ -304,7 +333,7 @@ def run_validation_check(
         # Check against all other objects
         for other in other_objects:
             try:
-                other_pos, _ = propagate_fn(other["tle_line1"], other["tle_line2"], t)
+                other_pos, _ = propagate_fn(other.tle_line1, other.tle_line2, t)
             except Exception:  # noqa: BLE001
                 continue
 
@@ -312,7 +341,7 @@ def run_validation_check(
 
             if dist_km < closest_third_party_km:
                 closest_third_party_km = dist_km
-                closest_third_party_name = other["name"]
+                closest_third_party_name = other.name
 
                 # Early exit: if we've already found a sub-threshold secondary risk,
                 # no need to keep scanning — outcome is already reject.
@@ -320,16 +349,16 @@ def run_validation_check(
                     logger.warning(
                         "[validation_agent] secondary risk detected: %s at %.2f km "
                         "at t+%d min",
-                        other["name"],
+                        other.name,
                         dist_km,
                         step * time_step_minutes,
                     )
                     return _rejection_result(
-                        f"Secondary conjunction risk: {other['name']} comes within "
+                        f"Secondary conjunction risk: {other.name} comes within "
                         f"{dist_km:.2f} km ({CONJUNCTION_THRESHOLD_KM:.1f} km threshold) "
                         f"at T+{step * time_step_minutes:.0f} min after maneuver.",
                         proposed_maneuver,
-                        nearest_third_object=other["name"],
+                        nearest_third_object=other.name,
                         min_distance_km=dist_km,
                     )
 
@@ -381,7 +410,7 @@ def _euclidean_distance_km(
 
 def _find_object(objects: list[TrackedObject], norad_id: str) -> TrackedObject | None:
     for obj in objects:
-        if obj["norad_id"] == norad_id:
+        if obj.norad_id == norad_id:
             return obj
     return None
 

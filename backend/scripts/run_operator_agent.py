@@ -76,10 +76,10 @@ def main() -> None:
         assert "justification_text" in message
         assert 0.0 <= message["yield_score"] <= 1.0
         assert len(message["justification_text"]) >= 10
-        print("  ✓ All assertions passed")
+        print("  [PASS] All assertions passed")
 
     print("\n" + "=" * 60)
-    print("✓ Operator agent verification complete")
+    print("[PASS] Operator agent verification complete")
     print("=" * 60)
 
 
