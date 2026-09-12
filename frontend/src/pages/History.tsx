@@ -35,8 +35,6 @@ type HistoryRow = {
   message_count: number;
 };
 
-import mockHistory from '../mockHistory.json';
-
 export default function History() {
   const [data, setData] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,14 +52,8 @@ export default function History() {
         const json = await res.json();
         setData(json);
       } catch (err) {
-        console.warn('Backend unavailable, falling back to mock history data', err);
-        // Provide mock data so the UI can be reviewed while backend is down
-        let fallbackData = mockHistory as HistoryRow[];
-        if (statusFilter) {
-          fallbackData = fallbackData.filter(row => row.resolution_status === statusFilter);
-        }
-        setData(fallbackData);
-        // We purposefully don't set error=true here so the table renders the mock data instead of the error state
+        console.error(err);
+        setError(true);
       } finally {
         setLoading(false);
       }
