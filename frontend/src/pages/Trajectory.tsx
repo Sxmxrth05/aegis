@@ -6,6 +6,8 @@ import { Badge } from '../components/shared/Badge';
 import { Button } from '../components/shared/Button';
 import type { ManeuverTrajectoryResult } from '../components/globe/types';
 
+import mockTrajectory from '../mockTrajectory.json';
+
 export default function Trajectory() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ManeuverTrajectoryResult | null>(null);
@@ -13,26 +15,21 @@ export default function Trajectory() {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
-    if (!id) return;
-    let canceled = false;
-    async function fetchData() {
-      setLoading(true);
+    async function fetchTrajectory() {
       try {
         const res = await fetch(`/api/trajectory/${id}`);
         if (!res.ok) throw new Error('Failed to fetch trajectory');
         const json = await res.json();
-        if (!canceled) {
-          setData(json);
-          setStepIndex(0);
-        }
+        setData(json);
       } catch (err) {
-        console.error(err);
+        console.warn('Backend unavailable, falling back to mock trajectory data', err);
+        // Use the imported mock trajectory data
+        setData(mockTrajectory as ManeuverTrajectoryResult);
       } finally {
-        if (!canceled) setLoading(false);
+        setLoading(false);
       }
     }
-    fetchData();
-    return () => { canceled = true; };
+    if (id) fetchTrajectory();
   }, [id]);
 
   if (loading) {
