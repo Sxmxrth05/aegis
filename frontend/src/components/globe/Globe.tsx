@@ -244,17 +244,25 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     ];
   }, [mode, trajectoryResult]);
 
+  // Landing's hero copy sits on the left of the (full-bleed) panel, so the
+  // globe itself is shifted right within that same panel to stop it
+  // overlapping the text — nothing else (panel, brackets, starfield) moves.
+  // Applied as a plain screen-space offset, kept in sync between the visual
+  // canvas transform below and the HUD label coordinates here so dots and
+  // labels stay aligned.
+  const landingXOffset = mode === 'landing' ? size.width * 0.22 : 0;
+
   const updateHud = useCallback(() => {
     const globe = globeRef.current;
     if (!globe) return;
     const screenPoints = points
       .map((point) => {
         const screen = globe.getScreenCoords(point.lat, point.lng, point.alt);
-        return { ...point, x: screen.x, y: screen.y };
+        return { ...point, x: screen.x + landingXOffset, y: screen.y };
       })
       .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= size.width && point.y <= size.height);
     setHudMarkers(clusterHudPoints(screenPoints));
-  }, [points, size]);
+  }, [points, size, landingXOffset]);
 
   const configureScene = useCallback(() => {
     const globe = globeRef.current;
@@ -335,6 +343,10 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
   return (
     <div ref={containerRef} className={`relative h-full w-full overflow-hidden ${className}`}>
       <div className="globe-star-dust" aria-hidden="true" />
+      <div
+        className="h-full w-full"
+        style={landingXOffset ? { transform: `translateX(${landingXOffset}px)` } : undefined}
+      >
       <ReactGlobe
         ref={globeRef}
         width={size.width || undefined}
@@ -388,6 +400,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
         pathDashGap={0.05}
         pathDashAnimateTime={3000}
       />
+      </div>
       <GlobeHud
         markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged, count, members }) => ({
           noradId: norad_id,
