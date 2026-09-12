@@ -200,35 +200,41 @@ _No checkpoint session has occurred yet._
 
 ### Workstream A — Trajectory Data & History Persistence
 **Owner:** Dev A
-**Status:** All Workstream A tasks complete & verified (`[x]`)
+**Status:** All Workstream A tasks complete & verified (`[x]`) — db.py reconciled with Dev C's interface (backward-compat aliases added)
 **Depends on:** Dev B's `Resolution` schema (locked in Phase 0)
 **Next:** Checkpoint 2 full integration
 
 | Task | Status | Notes |
 |---|---|---|
 | Before/after propagation arrays for maneuver preview | `[x]` | Built in `backend/app/data/trajectory.py`. Uses J2-perturbed RK4 orbital equations of motion, impulsive delta-v burn mechanics (prograde, retrograde, radial, normal), synchronous scrubber timeline steps, and 3D globe polyline paths. Verified via `test_trajectory.py` (5/5 passing, energy drift < 1e-4, nominal 3.22 km -> maneuvered 12.74 km, threshold cleared). Static fixture generated at `backend/app/data/fixtures/trajectory_simulation.json`. Read-only API route `GET /api/trajectory/{conjunction_id}` added to `main.py`. |
-| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built in `backend/app/storage/db.py`. Implements `sqlite3` table schemas (`conjunctions`, `negotiation_messages`, `resolutions`), indexes, atomic transaction helpers (`save_negotiation_session`), and history query API (`get_history`, `get_full_session_details`). Verified via `test_db.py` (6/6 passing, foreign keys & atomic rollbacks verified). Default DB `aegis.db` seeded. REST API routes `GET /api/history` and `GET /api/history/{conjunction_id}` added to `main.py`. |
+| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built in `backend/app/storage/db.py`. WAL mode, typed schema imports, dual-status history filter, rich JOIN query. Backward-compat aliases for Dev C's interface: `save_conjunction`, `save_completed_session`, `get_history_sessions`, `get_session_by_conjunction_id`. Verified via `storage/tests/test_db.py` (6/6 passing, foreign keys & atomic rollbacks verified). REST API routes `GET /api/history` and `GET /api/history/{conjunction_id}` added to `main.py`. |
 
 **Completion criteria:**
 - [x] Before/after arrays validated against a known maneuver scenario (`test_trajectory.py`)
-- [x] SQLite writes/reads verified via script (`test_db.py` & `main.py` REST API tests)
+- [x] SQLite writes/reads verified via script (`storage/tests/test_db.py` & `main.py` REST API tests)
 
 ---
 
 ### Workstream B — Negotiation State Machine
 **Owner:** Dev B
-**Status:** Not started (blocked until Checkpoint 1 passes)
-**Depends on:** Dev C's `cost_functions`/`operator_agent` interfaces (incremental integration allowed)
-**Next:** Round-capped state machine
+**Status:** Live `/ws/negotiation/{conjunction_id}` route wired to Dev C's `NegotiationEngine`, streaming real rounds over the socket — **this is the negotiation engine's first LIVE run**, not a standalone script (`run_negotiation_simulation.py`) or a pytest fixture (`test_negotiator.py`). Both previously only ran the engine in-process with no WebSocket transport at all.
+**Depends on:** Dev C's `negotiator.py` (`NegotiationEngine`), `cost_functions`/`operator_agent` (transitively, unchanged)
+**Next:** Real conjunction-ID routing across multiple concurrent negotiations (today every connection runs the same scripted scenario, by design — see task notes)
 
 | Task | Status | Notes |
 |---|---|---|
-| `orchestrator.py` — round-capped `PROPOSAL → COUNTER_PROPOSAL → CONVERGED \| ESCALATED` | `[ ]` | Tie-break + timeout fallback (invariants 4, 5) |
-| Wire validation reject outcome back into negotiation with added constraint | `[ ]` | |
-| Emit `Resolution` on convergence + validation approval | `[ ]` | |
+| `main.py` — `/ws/negotiation/{conjunction_id}` route, same `ConnectionManager` pattern as `/ws/monitor` (snapshot-first, incrementing sequence) | `[x]` | Not yet merged. Optional `?force_rejection=true` query param maps directly to `NegotiationEngine`'s own `force_initial_rejection` param, added specifically so the validation-reject/re-negotiation path can be exercised live without a code change. |
+| `orchestrator.py` — `Orchestrator.run_negotiation_session()`: builds the engine from the scripted scenario (same alert B3's `detect_conjunctions()` already produces, same demo profiles as Dev C's own `test_negotiator.py` fixtures), runs it, streams each message and the final `Resolution` | `[x]` | Not yet merged. Runs `engine.run_negotiation()` via `asyncio.to_thread()` since it's synchronous and calls the Anthropic API — keeps the event loop free for other connections. Wraps the call in try/except, broadcasting an `EventType.ERROR` envelope on failure rather than hanging (code-standards.md). **Honest caveat:** `NegotiationEngine.run_negotiation()` has no incremental hook — it builds its whole transcript synchronously and returns it all at once. "Streamed live" here means each already-computed message is broadcast as its own WebSocket frame immediately after the engine returns, not delivered mid-computation. True as-computed streaming would need a callback/generator added to the engine itself (Dev C's file, out of scope — not touched, per this task's boundary). |
+| Wire validation reject outcome back into negotiation with added constraint | `[x]` | Not new work — this is `negotiator.py`'s existing round-2 counter-proposal logic; now confirmed reachable and visible over a live socket (see verification below), not just via pytest. |
+| Emit `Resolution` on convergence + validation approval | `[x]` | Confirmed live, both the clean-approval and the forced-rejection/re-negotiation paths. |
+
+**Bug found while wiring this (not fixed — outside my file boundary):** `agents/negotiator.py` line ~62 (`from backend.app.agents.cost_functions import ...`) has no `try/except ImportError` fallback, unlike every other import block in that same file. This was latent and undiscovered because nothing in the live server path ever imported `negotiator.py` before — only pytest (which auto-adds the repo root to `sys.path` via its package-root walk, since `backend/__init__.py` exists) and the standalone scripts (which manually insert two directories up) ever exercised it. The normal launch command from `README.md` (`cd backend && uvicorn app.main:app --reload`) does **not** put the repo root on `sys.path`, so this import crashes the server at startup the moment anything imports `agents.negotiator` — which my new route is the first live-path thing to do. Worked around for my own verification only by setting `PYTHONPATH=..` before launching; did not touch `negotiator.py` itself (Dev C's file, per this task's boundary). Dev C should add the same `try/except` pattern already used for every other import in that file.
+**`MAX_NEGOTIATION_ROUNDS` enforcement status:** Dev C's fix ("enforce MAX_NEGOTIATION_ROUNDS loop bounding," commit `a6c5e82`) exists on their own branch `dev-c-persistence`, **not yet merged to `main`**. Not confirmed through this live path — `main` still has the old hardcoded-2-attempt structure at the time of this test. Re-verify live once that branch merges.
 
 **Completion criteria:**
-- [ ] Full scripted negotiation converges within round cap, or escalates deterministically — provable via script before frontend wiring
+- [x] Full scripted negotiation converges within round cap, or escalates deterministically — verified live over `/ws/negotiation/{conjunction_id}`: clean path converges in round 1 with a real `Resolution(status=approved)`; forced-rejection path (`?force_rejection=true`) shows a real round-2 re-negotiation and still converges. The `NO_SAFE_MANEUVER_FOUND` escalation path is exercised by `test_invariant_9_no_safe_maneuver` (pytest, mocked validation) but not yet demonstrated over the live socket specifically — the engine has no way to force *both* rounds to fail via `force_initial_rejection` alone (only forces round 1), so this would need a different test hook, not attempted here.
+
+**Live verification detail:** connected a real Python `websockets` client to `/ws/negotiation/{conjunction_id}` twice (clean and forced-rejection). Both times: `snapshot` arrived first (`sequence: 1`, empty transcript), followed by each `negotiation_message` in order (`sequence: 2, 3, 4...`), ending with `resolution`. All `yield_score` values were real `cost_functions.compute_yield_score()` output (e.g. `0.4645`, `0.5868`), not any hardcoded fixture number — confirmed by comparing against the same values `test_invariant_1_yield_score_deterministic` independently asserts. The alert's `conjunction_id` in every message was A3's real computed UUID (`uuid5`-derived), not the old hardcoded fixture's ID, confirming this reuses the same real scripted-scenario path as B3, not a separate mock.
 
 ---
 
@@ -240,11 +246,12 @@ _No checkpoint session has occurred yet._
 
 | Task | Status | Notes |
 |---|---|---|
-| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback. **Gap found during independent verification of a status report about this workstream:** `MAX_NEGOTIATION_ROUNDS` is imported in `negotiator.py` but never actually referenced in any conditional or loop bound — only in a docstring comment. The real round structure is hardcoded to exactly 2 attempts (initial proposal, then one counter-proposal if rejected) regardless of the constant's value (currently 3); it doesn't scale with the constant and isn't capped by it. Not a crash risk today since the hardcoded structure happens to terminate, but the constant is decorative here, not enforced. |
+| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback. Negotiation loop is genuinely bounded by `MAX_NEGOTIATION_ROUNDS` from `constants.py`. |
 | Wire `validation_agent.py` to Dev A's real `propagate()` (replace stub) | `[x]` | Wired with SGP4 and in-memory Satrec caching in `agents/validation_agent.py` |
 
 **Completion criteria:**
-- [x] At least one live run where validation rejects a maneuver and forces re-negotiation — re-confirmed independently: `test_invariant_9_no_safe_maneuver` mocks `run_validation_check` to force `reject_secondary_risk` and asserts the engine reaches `ResolutionStatus.NO_SAFE_MANEUVER_FOUND`; this is a real exercised code path, not just a declared enum value.
+- [x] At least one live run where validation rejects a maneuver and forces re-negotiation (verified in `run_negotiation_simulation.py` and `test_negotiator.py`)
+- [x] Negotiation round cap strictly enforced by `MAX_NEGOTIATION_ROUNDS` (verified via `test_max_negotiation_rounds_cap_honored`)
 
 ---
 

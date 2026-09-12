@@ -1,5 +1,5 @@
 """
-db.py — Dev A (Phase 2 Workstream A)
+db.py — Dev A (Phase 2 Workstream A) + Dev C reconciliation
 
 SQLite Persistence & History Storage Engine.
 Provides durable local persistence for conjunction alerts, negotiation transcripts,
@@ -7,16 +7,21 @@ and resolutions, matching architecture.md's DB schema exactly.
 
 Provides query functions for Dev D's History table (/history) and REST endpoints.
 
-Ownership: Dev A
+Ownership: Dev A (primary), reconciled with Dev C's interface aliases.
+
+Dev C compatibility: save_conjunction, save_completed_session, get_history_sessions,
+and get_session_by_conjunction_id are all re-exported aliases below so any existing
+caller in agents/negotiator.py or storage/tests/ continues to work unchanged.
 """
 
 from __future__ import annotations
 
+import logging
 import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
@@ -28,8 +33,14 @@ except ImportError:
     from app.schemas.negotiation import NegotiationMessage, Resolution, ResolutionStatus
 
 
+logger = logging.getLogger("[storage.db]")
+
 DEFAULT_DB_PATH = Path(__file__).parent / "aegis.db"
 
+
+# ---------------------------------------------------------------------------
+# Connection Helpers
+# ---------------------------------------------------------------------------
 
 def get_db_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """
@@ -107,10 +118,13 @@ def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
 
         # Indexes for fast filtering and joins
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conjunctions_status ON conjunctions (status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conjunctions_created ON conjunctions (created_at DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conjunction ON negotiation_messages (conjunction_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_resolutions_conjunction ON resolutions (conjunction_id);")
 
         conn.commit()
+
+    logger.info("Initialized database tables at %s", db_path)
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +365,12 @@ def save_negotiation_session(
 
         conn.commit()
 
+    logger.info(
+        "Saved negotiation session for conjunction %s (%d messages)",
+        alert.id,
+        len(messages),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Read & Query Operations (History Table API)
@@ -407,6 +427,10 @@ def get_history(
     Primary query for Dev D's History page (/history).
     Returns a joined list of past conjunctions with their resolution details
     and message counts. Supports filtering by status ('resolved', 'escalated', etc.).
+
+    Uses a dual-status filter: matches on conjunction.status OR resolution.status
+    so that e.g. status='approved' returns rows where the resolution was approved
+    regardless of the conjunction's own status string.
     """
     with get_db_connection(db_path) as conn:
         query = """
@@ -432,8 +456,8 @@ def get_history(
         """
         params: list[Any] = []
         if status_filter:
-            query += " WHERE c.status = ?"
-            params.append(status_filter)
+            query += " WHERE (c.status = ? OR r.status = ?)"
+            params.extend([status_filter, status_filter])
 
         query += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?;"
         params.extend([limit, offset])
@@ -449,6 +473,9 @@ def get_full_session_details(
     """
     Returns the complete session record (conjunction alert, negotiation messages
     transcript, and resolution) for detailed modal / history drill-down views.
+
+    Returns: {"conjunction": dict, "transcript": list[dict], "resolution": dict | None}
+    or None if the conjunction_id is not found.
     """
     alert = get_conjunction(conjunction_id, db_path)
     if not alert:
@@ -461,4 +488,70 @@ def get_full_session_details(
         "conjunction": alert,
         "transcript": messages,
         "resolution": resolution,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat aliases (Dev C interface)
+# ---------------------------------------------------------------------------
+# Dev C's agents/negotiator.py calls save_conjunction(), save_completed_session(),
+# get_history_sessions(), and get_session_by_conjunction_id(). These are all
+# thin wrappers that delegate to the primary functions above.
+# ---------------------------------------------------------------------------
+
+def save_conjunction(
+    conjunction: Any,
+    db_path: Path | str | None = None,
+) -> None:
+    """Alias for save_conjunction_alert(). Accepts Pydantic model or dict."""
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    if isinstance(conjunction, dict):
+        conjunction = ConjunctionAlert(**conjunction)
+    save_conjunction_alert(conjunction, _db)
+
+
+def save_completed_session(
+    conjunction: Any,
+    messages: Iterable[Any],
+    resolution: Any,
+    db_path: Path | str | None = None,
+) -> None:
+    """Alias for save_negotiation_session(). Accepts Pydantic models or dicts."""
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    save_negotiation_session(conjunction, list(messages), resolution, _db)
+
+
+def get_history_sessions(
+    limit: int = 50,
+    offset: int = 0,
+    status_filter: str | None = None,
+    db_path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Alias for get_history() with reordered kwargs matching Dev C's signature.
+    Note: get_history() uses positional status_filter first; this alias
+    accepts the keyword-arg order Dev C used.
+    """
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    return get_history(status_filter=status_filter, limit=limit, offset=offset, db_path=_db)
+
+
+def get_session_by_conjunction_id(
+    conjunction_id: str,
+    db_path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Alias for get_full_session_details().
+    Returns {"conjunction": dict, "messages": list[dict], "resolution": dict | None}
+    matching Dev C's key naming (uses 'messages' instead of 'transcript').
+    """
+    _db = db_path if db_path is not None else DEFAULT_DB_PATH
+    result = get_full_session_details(conjunction_id, _db)
+    if result is None:
+        return None
+    # Dev C's version used key "messages" not "transcript"
+    return {
+        "conjunction": result["conjunction"],
+        "messages": result["transcript"],
+        "resolution": result["resolution"],
     }

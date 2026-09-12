@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from app.orchestrator.orchestrator import MONITOR_SESSION_ID, Orchestrator
+from app.orchestrator.orchestrator import MONITOR_SESSION_ID, Orchestrator, negotiation_session_id
 from app.orchestrator.websocket_manager import ConnectionManager
 
 app = FastAPI(title="Aegis")
@@ -67,3 +67,23 @@ async def monitor_socket(websocket: WebSocket) -> None:
             await websocket.receive_text()
     except WebSocketDisconnect:
         connection_manager.disconnect(MONITOR_SESSION_ID, websocket)
+
+
+@app.websocket("/ws/negotiation/{conjunction_id}")
+async def negotiation_socket(
+    websocket: WebSocket, conjunction_id: str, force_rejection: bool = False
+) -> None:
+    # `force_rejection` is a verification knob (see NegotiationEngine's own
+    # force_initial_rejection param) — connect with ?force_rejection=true to
+    # exercise the validation-reject / re-negotiation path over the socket.
+    session_id = negotiation_session_id(conjunction_id)
+    snapshot_payload = {"messages": [], "resolution": None}
+    await connection_manager.connect(session_id, websocket, snapshot_payload)
+    try:
+        await orchestrator.run_negotiation_session(
+            conjunction_id, session_id, force_rejection=force_rejection
+        )
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connection_manager.disconnect(session_id, websocket)
