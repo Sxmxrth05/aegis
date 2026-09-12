@@ -54,9 +54,7 @@ async def echo_socket(websocket: WebSocket) -> None:
 
 @app.websocket("/ws/monitor")
 async def monitor_socket(websocket: WebSocket) -> None:
-    # TODO: once the orchestrator tracks real session state, this snapshot
-    # should reflect currently-known conjunctions rather than an empty list.
-    snapshot_payload = {"conjunctions": []}
+    snapshot_payload = orchestrator.monitor_snapshot_payload()
     await connection_manager.connect(MONITOR_SESSION_ID, websocket, snapshot_payload)
     try:
         # Simplest trigger for now: broadcast on connect. Every new connection

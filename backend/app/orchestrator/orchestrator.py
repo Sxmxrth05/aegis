@@ -49,12 +49,31 @@ except ImportError:
 
 try:
     from backend.app.agents.negotiator import NegotiationEngine, OperatorProfile
-    from backend.app.data.scenario import get_seeded_scenario_objects
+    from backend.app.data.scenario import FIXTURES_DIR, get_seeded_scenario_objects
     from backend.app.schemas.negotiation import AgentId
+    from backend.app.schemas.tracked_object import TrackedObject
 except ImportError:
     from app.agents.negotiator import NegotiationEngine, OperatorProfile
-    from app.data.scenario import get_seeded_scenario_objects
+    from app.data.scenario import FIXTURES_DIR, get_seeded_scenario_objects
     from app.schemas.negotiation import AgentId
+    from app.schemas.tracked_object import TrackedObject
+
+import json
+
+
+def load_tracked_objects_fixture() -> list[TrackedObject]:
+    """
+    Loads Dev A's Phase 0 TrackedObject mock fixture
+    (data/fixtures/tracked_objects.json) as canonical, schema-validated
+    Pydantic objects — the real 5-satellite scripted-demo set, not
+    fabricated/live-fetched data. Used to populate the /ws/monitor
+    snapshot so the globe shows real tracked-object state on connect
+    instead of an empty array.
+    """
+    fixture_path = FIXTURES_DIR / "tracked_objects.json"
+    with open(fixture_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    return [TrackedObject(**obj) for obj in raw]
 
 # Hardcoded demo profiles for the scripted scenario's conjunction pair
 # (ISS 25544 <-> CSS Tianhe 48274) — same values used in Dev C's own
@@ -93,6 +112,22 @@ class Orchestrator:
     def detect_conjunctions(self) -> list[ConjunctionAlert]:
         alerts = run_detect_conjunctions()
         return alerts if alerts else [_HARDCODED_ALERT]
+
+    def monitor_snapshot_payload(self) -> dict:
+        """
+        Snapshot payload for a new /ws/monitor connection. `trackedObjects`
+        (camelCase — matches the frontend store's SnapshotPayload type
+        exactly, since this raw dict is sent as-is, not through a Pydantic
+        model with field aliasing) is real fixture data via
+        `load_tracked_objects_fixture()`, not mock/fabricated numbers.
+        `conjunctions` stays empty here — the conjunction_alert itself
+        arrives via the separate broadcast right after connect, same as
+        before this change.
+        """
+        return {
+            "conjunctions": [],
+            "trackedObjects": [obj.model_dump() for obj in load_tracked_objects_fixture()],
+        }
 
     async def broadcast_conjunction_alerts(
         self, session_id: str = MONITOR_SESSION_ID
