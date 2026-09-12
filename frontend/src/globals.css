@@ -272,3 +272,107 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Custom cursor ─────────────────────────────────────────────
+   Hides the native cursor only while CustomCursor.tsx is actually mounted
+   and active (pointer:fine, non-touch) — see the component for the
+   pointer/touch/reduced-motion gating logic. */
+html.custom-cursor-active,
+html.custom-cursor-active * {
+  cursor: none !important;
+}
+
+.custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.custom-cursor__ring {
+  position: absolute;
+  top: -19px;
+  left: -19px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  animation: custom-cursor-spin 9s linear infinite;
+}
+
+.custom-cursor__brackets {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  fill: none;
+  stroke: var(--color-accent-light);
+  stroke-width: 1.5;
+  opacity: 0.85;
+  transition: transform 160ms ease-out, stroke 160ms ease-out;
+}
+
+.custom-cursor__dot {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+/* Hover-lock: brackets pull in tighter and brighten to full accent, center
+   dot fades in — same crosshair/bracket language, just "locked on". */
+.custom-cursor--hover .custom-cursor__brackets {
+  transform: scale(0.62);
+  stroke: var(--color-accent);
+}
+
+.custom-cursor--hover .custom-cursor__dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Reduced-motion fallback: a plain static reticle — no rotating ring, no
+   click pulses (CustomCursor.tsx skips spawning pings entirely). */
+.custom-cursor--static .custom-cursor__brackets {
+  opacity: 0.7;
+}
+
+@keyframes custom-cursor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.custom-cursor-ping {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9998;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cursor-ping-color, var(--color-accent));
+  pointer-events: none;
+  animation: custom-cursor-ping 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes custom-cursor-ping {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
