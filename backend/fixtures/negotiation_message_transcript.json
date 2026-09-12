@@ -1,0 +1,124 @@
+[
+  {
+    "_comment": "Sample NegotiationMessage transcript — Phase 0 fixture (Dev C). Consumed by Dev D in Phase 2 for mock-first Negotiation Console UI. Field names match architecture.md §Database Schema negotiation_messages.",
+    "conjunction_id": "conj-demo-001",
+    "messages": [
+      {
+        "id": "msg-001",
+        "conjunction_id": "conj-demo-001",
+        "agent_id": "operator_A",
+        "round": 1,
+        "yield_score": 0.6823,
+        "justification_text": "STARLINK-1234 has a fuel margin of 72% and a low Mission Value Index of 3.0, resulting in a yield score of 0.68. With a modest required Δv of 4.2 m/s and the conjunction only 1.8 km away, we are prepared to maneuver.",
+        "proposed_action": "maneuver",
+        "created_at": "2026-09-12T07:00:00Z"
+      },
+      {
+        "id": "msg-002",
+        "conjunction_id": "conj-demo-001",
+        "agent_id": "operator_B",
+        "round": 1,
+        "yield_score": 0.2941,
+        "justification_text": "ONEWEB-5678 is a high-priority relay with MVI 8.5 and only 18% fuel remaining. Our yield score of 0.29 reflects that maneuvering at this stage would critically deplete propellant reserves needed for end-of-life disposal. We propose STARLINK-1234 executes the avoidance burn.",
+        "proposed_action": "stand_down",
+        "created_at": "2026-09-12T07:00:04Z"
+      },
+      {
+        "id": "msg-003",
+        "conjunction_id": "conj-demo-001",
+        "agent_id": "operator_A",
+        "round": 2,
+        "yield_score": 0.6823,
+        "justification_text": "Acknowledging ONEWEB-5678's fuel constraints. STARLINK-1234 confirms maneuver readiness — our yield score of 0.68 remains higher, and the 4.2 m/s burn is within our operational budget. Proceeding to agreement.",
+        "proposed_action": "maneuver",
+        "created_at": "2026-09-12T07:00:09Z"
+      },
+      {
+        "id": "msg-004",
+        "conjunction_id": "conj-demo-001",
+        "agent_id": "operator_B",
+        "round": 2,
+        "yield_score": 0.2941,
+        "justification_text": "ONEWEB-5678 concurs. The yield score differential (0.68 vs 0.29) clearly indicates STARLINK-1234 should maneuver. Standing by for validation clearance.",
+        "proposed_action": "stand_down",
+        "created_at": "2026-09-12T07:00:13Z"
+      },
+      {
+        "id": "msg-005",
+        "conjunction_id": "conj-demo-001",
+        "agent_id": "validation",
+        "round": 2,
+        "yield_score": null,
+        "justification_text": "Validation passed. 6-hour lookahead propagation shows no secondary conjunctions after the proposed maneuver. Closest third-party object: DEBRIS-7712 at 23.4 km. Expected post-maneuver miss distance: 12.8 km. Approving maneuver.",
+        "proposed_action": "approve",
+        "created_at": "2026-09-12T07:00:18Z"
+      }
+    ]
+  },
+  {
+    "_comment": "Second scenario: validation rejects the first proposal and forces re-negotiation. This demonstrates the reject_secondary_risk path required by the success criteria.",
+    "conjunction_id": "conj-demo-002",
+    "messages": [
+      {
+        "id": "msg-101",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "operator_A",
+        "round": 1,
+        "yield_score": 0.5512,
+        "justification_text": "STARLINK-2001 (MVI 5.0, 55% fuel) has a yield score of 0.55. The conjunction is at 2.3 km — within critical range. We propose a 6.0 m/s prograde burn.",
+        "proposed_action": "maneuver",
+        "created_at": "2026-09-12T08:00:00Z"
+      },
+      {
+        "id": "msg-102",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "operator_B",
+        "round": 1,
+        "yield_score": 0.4201,
+        "justification_text": "ASTRA-9 (MVI 6.5, 40% fuel) scores 0.42 — marginally lower than counterpart. Yield score differential is within 15%; requesting round 2 for further negotiation.",
+        "proposed_action": "stand_down",
+        "created_at": "2026-09-12T08:00:05Z"
+      },
+      {
+        "id": "msg-103",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "validation",
+        "round": 1,
+        "yield_score": null,
+        "justification_text": "REJECTED. The proposed 6.0 m/s prograde burn creates a secondary conjunction risk: DEBRIS-3301 comes within 3.1 km of STARLINK-2001 at T+140 min (threshold: 5.0 km). Re-entering negotiation with added constraint: Δv must not exceed 3.5 m/s prograde.",
+        "proposed_action": "reject_secondary_risk",
+        "created_at": "2026-09-12T08:00:12Z"
+      },
+      {
+        "id": "msg-104",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "operator_A",
+        "round": 2,
+        "yield_score": 0.5103,
+        "justification_text": "Acknowledging validation constraint: Δv capped at 3.5 m/s. Revised yield score is 0.51 under the new constraint. STARLINK-2001 proposes a 3.5 m/s radial burn — sufficient to achieve 8.4 km post-maneuver separation.",
+        "proposed_action": "maneuver",
+        "created_at": "2026-09-12T08:00:18Z"
+      },
+      {
+        "id": "msg-105",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "operator_B",
+        "round": 2,
+        "yield_score": 0.4201,
+        "justification_text": "ASTRA-9 accepts revised proposal. The constrained maneuver keeps STARLINK-2001 clear of DEBRIS-3301. Agreeing to revised plan.",
+        "proposed_action": "stand_down",
+        "created_at": "2026-09-12T08:00:22Z"
+      },
+      {
+        "id": "msg-106",
+        "conjunction_id": "conj-demo-002",
+        "agent_id": "validation",
+        "round": 2,
+        "yield_score": null,
+        "justification_text": "Validation passed on revised maneuver. No secondary conjunctions in 6-hour lookahead. Closest object: DEBRIS-3301 at 9.2 km (cleared from 3.1 km). Expected miss distance: 8.4 km. Approved.",
+        "proposed_action": "approve",
+        "created_at": "2026-09-12T08:00:29Z"
+      }
+    ]
+  }
+]

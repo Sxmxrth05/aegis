@@ -44,7 +44,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 | WebSocket envelope contract (`{type, sequence, payload}` + event types) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `WebSocketEnvelope`/`EventType` in `backend/app/schemas/websocket.py`; `ConnectionManager` in `backend/app/orchestrator/websocket_manager.py` implements per-session monotonic sequencing and always sends a `snapshot` first on connect (invariant 6). |
 | Shared constants (`CONJUNCTION_THRESHOLD_KM`, `HYSTERESIS_CLEAR_KM`, `MAX_NEGOTIATION_ROUNDS`, `VALIDATION_LOOKAHEAD_HOURS`) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. **@Dev C: heads up** — this file lives at `backend/app/constants.py` (app root), **not** inside `agents/cost_functions.py` as build-plan.md's wording ("cost_functions.py-adjacent") might suggest. `agents/` is your owned directory, so I deliberately didn't put a new file there — import the four constants from `app.constants` in `cost_functions.py` rather than redefining them locally. |
 | Mock fixture: `TrackedObject` / `ConjunctionAlert` JSON | Dev A | `[ ]` | Consumed immediately by Dev D |
-| Mock fixture: sample `NegotiationMessage` transcript | Dev C | `[ ]` | Consumed by Dev D in Phase 2 |
+| Mock fixture: sample `NegotiationMessage` transcript | Dev C | `[M]` | `backend/fixtures/negotiation_message_transcript.json` — 2 scenarios (clean + reject→re-negotiate), ready for Dev D |
 | Mock fixture: sample `Resolution` | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `backend/app/data/fixtures/resolution.json` — validated against `schemas/negotiation.py`'s `Resolution` model; a `maneuver`/`approved` example with realistic yield-score/Δv/rationale text for Dev D to build the Negotiation Result screen against. |
 | Ownership map | (this document + build-plan.md) | `[x]` | Established by build-plan.md |
 
@@ -109,24 +109,24 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 
 ### Workstream C — Agent Intelligence: Cost, Narration & Validation
 **Owner:** Dev C
-**Current task:** —
-**Status:** Not started
-**Blocked by:** Phase 0 exit (schemas/constants)
-**Waiting on:** Nothing blocking (C2/C3 use stubs/fixtures until Checkpoint 1)
-**Next:** C1
-**Merge status:** Nothing merged
+**Current task:** Phase 0 fixture + C1 + C2 + C3 all complete
+**Status:** All three modules independently testable and passing
+**Blocked by:** Nothing — C2/C3 wiring to live orchestrator blocked until Checkpoint 1 (expected)
+**Waiting on:** Dev A's real `propagate()` (stub in place; DI pattern ready for swap)
+**Next:** Await Checkpoint 1 merge session; then wire into live orchestrator (Phase 2 C tasks)
+**Merge status:** Ready to merge on branch `dev-c`
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
-| C1 | `agents/cost_functions.py` — `yield_score` from MVI + fuel/Δv | `[ ]` | Unit-tested against hardcoded scenarios |
-| C2 | `agents/operator_agent.py` skeleton — Anthropic call, Pydantic-validated, retry-then-template-fallback | `[ ]` | Early start; tested against C1's fixture yield_scores |
-| C3 | `agents/validation_agent.py` skeleton — 6h re-propagation check | `[ ]` | Early start; uses stubbed `propagate()` until Dev A's is ready |
+| C1 | `agents/cost_functions.py` — `yield_score` from MVI + fuel/Δv | `[x]` | 27/27 unit tests passing; `compute_yield_score`, `compute_delta_v_cost`, `pick_maneuvering_agent`, all constants |
+| C2 | `agents/operator_agent.py` skeleton — Anthropic call, Pydantic-validated, retry-then-template-fallback | `[x]` | Standalone script verified; `build_negotiation_message()` ready for orchestrator |
+| C3 | `agents/validation_agent.py` skeleton — 6h re-propagation check | `[x]` | All 3 outcomes tested (approve / reject_secondary_risk / approved_no_action); stub `propagate()` injected via DI |
 
 #### Completion Criteria
-- [ ] Unit tests for `cost_functions.py` pass
-- [ ] Standalone script calls `operator_agent.py` with fixture input and prints narration
-- [ ] Standalone validation run succeeds against a fixture tracked-object set
-- [ ] All three modules testable without a live orchestrator or WebSocket connection
+- [x] Unit tests for `cost_functions.py` pass (27/27)
+- [x] Standalone script calls `operator_agent.py` with fixture input and prints narration
+- [x] Standalone validation run succeeds against a fixture tracked-object set (all 3 paths)
+- [x] All three modules testable without a live orchestrator or WebSocket connection
 
 ---
 

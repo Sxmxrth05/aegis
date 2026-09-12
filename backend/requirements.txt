@@ -5,3 +5,4 @@ pydantic
 anthropic
 httpx
 websockets
+pytest
