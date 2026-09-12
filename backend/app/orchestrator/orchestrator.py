@@ -113,7 +113,9 @@ def load_all_tracked_objects() -> list[TrackedObject]:
     return load_tracked_objects_fixture()
 
 
-# Physically docked/co-located object groups within the 20-object curated set.
+# Physically docked/co-located object groups within the 20-object curated set
+# (the set itself is LOCKED_OBJECTS in backend/app/data/celestrak.py — keep
+# this list in sync with that one if the curated set changes).
 # These satellites share a single station structure, so pairwise conjunction
 # detection reports them at ~0.0km/0.0km/s separation — a data-modeling
 # artifact (the propagated positions are identical), not a real collision
