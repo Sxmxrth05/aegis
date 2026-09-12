@@ -12,9 +12,9 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 | Team size | 4 developers |
 | Current phase | **Phase 0 — Shared Foundation & Contracts** |
 | Current checkpoint target | Checkpoint 1 — Live Conjunction Pipeline (not yet reached) |
-| Overall status | 🟡 In progress — repo skeleton (backend + frontend) scaffolded and pushed; schemas/WS envelope/constants/fixtures still outstanding |
-| Last completed milestone | Repo skeleton (backend `/backend/app/`, frontend `/frontend/src/`) committed to `main` |
-| Current team objective | Lock Pydantic schemas, WebSocket envelope contract, shared constants, and mock fixtures to finish Phase 0 |
+| Overall status | 🟡 In progress — repo skeleton, schemas, WebSocket envelope, shared constants, and the Resolution fixture are on `main`; still waiting on Dev A's `TrackedObject`/`ConjunctionAlert` fixture and Dev C's `NegotiationMessage` transcript fixture (exists on `dev-c`, not yet merged) before Phase 0 fully closes |
+| Last completed milestone | `foundation/contracts` merged to `main` (commit `3818c17`, reviewed/approved by Dev C): Pydantic schemas, WebSocket envelope contract, shared constants, Resolution mock fixture |
+| Current team objective | Get Dev A's and Dev C's remaining Phase 0 mock fixtures merged to `main` to close out Phase 0 |
 | Next team milestone | Phase 0 exit → developers branch into Workstreams A–D |
 
 ---
@@ -40,20 +40,20 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 |---|---|---|---|
 | Repo skeleton (backend half) | Dev B | `[M]` | `/backend/app/{agents,data,schemas,orchestrator,storage}` scaffolded — FastAPI app + health route + `/ws/echo` stub in `main.py`. Package dirs are empty `__init__.py` placeholders; real logic not yet written. |
 | Repo skeleton (frontend half) | Dev D | `[M]` | `/frontend/src/{components,pages,store,lib}` scaffolded — Vite + React + TS + Tailwind v4 wired to `ui-tokens.md`'s tokens, top nav (`components/shared/NavBar.tsx`) with placeholder routes for all 6 pages. `store/` and `lib/` still empty — D5/D6 not started. |
-| Pydantic schemas (`TrackedObject`, `ConjunctionAlert`, `NegotiationMessage`, `Resolution`) | Dev B | `[x]` | Implemented in `backend/app/schemas/{tracked_object,conjunction,negotiation}.py`, field names/types match `architecture.md`'s DB schema exactly; `TrackedObject` isn't a DB table so its shape follows the TLE/SGP4 state it carries instead (norad_id, name, TLE lines, ECI position/velocity, timestamp). Re-exported from `schemas/__init__.py`. |
-| WebSocket envelope contract (`{type, sequence, payload}` + event types) | Dev B | `[x]` | `WebSocketEnvelope`/`EventType` in `backend/app/schemas/websocket.py`; `ConnectionManager` in `backend/app/orchestrator/websocket_manager.py` implements per-session monotonic sequencing and always sends a `snapshot` first on connect (invariant 6). |
-| Shared constants (`CONJUNCTION_THRESHOLD_KM`, `HYSTERESIS_CLEAR_KM`, `MAX_NEGOTIATION_ROUNDS`, `VALIDATION_LOOKAHEAD_HOURS`) | Dev B | `[x]` | **@Dev C: heads up** — this file lives at `backend/app/constants.py` (app root), **not** inside `agents/cost_functions.py` as build-plan.md's wording ("cost_functions.py-adjacent") might suggest. `agents/` is your owned directory, so I deliberately didn't put a new file there — import the four constants from `app.constants` in `cost_functions.py` rather than redefining them locally. |
+| Pydantic schemas (`TrackedObject`, `ConjunctionAlert`, `NegotiationMessage`, `Resolution`) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. Implemented in `backend/app/schemas/{tracked_object,conjunction,negotiation}.py`, field names/types match `architecture.md`'s DB schema exactly; `TrackedObject` isn't a DB table so its shape follows the TLE/SGP4 state it carries instead (norad_id, name, TLE lines, ECI position/velocity, timestamp). Re-exported from `schemas/__init__.py`. |
+| WebSocket envelope contract (`{type, sequence, payload}` + event types) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `WebSocketEnvelope`/`EventType` in `backend/app/schemas/websocket.py`; `ConnectionManager` in `backend/app/orchestrator/websocket_manager.py` implements per-session monotonic sequencing and always sends a `snapshot` first on connect (invariant 6). |
+| Shared constants (`CONJUNCTION_THRESHOLD_KM`, `HYSTERESIS_CLEAR_KM`, `MAX_NEGOTIATION_ROUNDS`, `VALIDATION_LOOKAHEAD_HOURS`) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. **@Dev C: heads up** — this file lives at `backend/app/constants.py` (app root), **not** inside `agents/cost_functions.py` as build-plan.md's wording ("cost_functions.py-adjacent") might suggest. `agents/` is your owned directory, so I deliberately didn't put a new file there — import the four constants from `app.constants` in `cost_functions.py` rather than redefining them locally. |
 | Mock fixture: `TrackedObject` / `ConjunctionAlert` JSON | Dev A | `[ ]` | Consumed immediately by Dev D |
 | Mock fixture: sample `NegotiationMessage` transcript | Dev C | `[ ]` | Consumed by Dev D in Phase 2 |
-| Mock fixture: sample `Resolution` | Dev B | `[x]` | `backend/app/data/fixtures/resolution.json` — validated against `schemas/negotiation.py`'s `Resolution` model; a `maneuver`/`approved` example with realistic yield-score/Δv/rationale text for Dev D to build the Negotiation Result screen against. |
+| Mock fixture: sample `Resolution` | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `backend/app/data/fixtures/resolution.json` — validated against `schemas/negotiation.py`'s `Resolution` model; a `maneuver`/`approved` example with realistic yield-score/Δv/rationale text for Dev D to build the Negotiation Result screen against. |
 | Ownership map | (this document + build-plan.md) | `[x]` | Established by build-plan.md |
 
 ### Phase 0 Exit Checklist
 
-- [ ] Schemas committed to `main`
-- [ ] WebSocket envelope contract committed to `main`
-- [ ] Shared constants committed to `main`
-- [ ] All three mock fixtures committed to `main`
+- [x] Schemas committed to `main`
+- [x] WebSocket envelope contract committed to `main`
+- [x] Shared constants committed to `main`
+- [ ] All three mock fixtures committed to `main` — only the Resolution fixture (Dev B) is on `main` so far; Dev A's `TrackedObject`/`ConjunctionAlert` fixture and Dev C's `NegotiationMessage` transcript fixture (already on the `dev-c` branch) still need to be merged
 - [x] Repo skeleton (backend + frontend) committed to `main`
 - [ ] All four developers have pulled `main` and can branch out
 
