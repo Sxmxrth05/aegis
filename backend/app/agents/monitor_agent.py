@@ -14,19 +14,54 @@ Pydantic TrackedObject instances (from schemas.tracked_object) out.
 
 from __future__ import annotations
 
+import math
+import sys
+import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Iterable, Any
+
+# Ensure backend root is on sys.path for direct script execution
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+_APP_DIR = _BACKEND_DIR / "app"
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
 
 from sgp4.api import Satrec, SGP4_ERRORS, jday
 
 try:
+    from backend.app.constants import CONJUNCTION_THRESHOLD_KM, HYSTERESIS_CLEAR_KM
+    from backend.app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
     from backend.app.schemas.tracked_object import TrackedObject
 except ImportError:
     try:
+        from app.constants import CONJUNCTION_THRESHOLD_KM, HYSTERESIS_CLEAR_KM
+        from app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
         from app.schemas.tracked_object import TrackedObject
     except ImportError:
-        # Fallback if schemas package not in PYTHONPATH
+        CONJUNCTION_THRESHOLD_KM = 5.0
+        HYSTERESIS_CLEAR_KM = 4.0
+        from enum import Enum
         from pydantic import BaseModel, Field
+
+        class ConjunctionStatus(str, Enum):
+            ALERTED = "alerted"
+            NEGOTIATING = "negotiating"
+            RESOLVED = "resolved"
+            ESCALATED = "escalated"
+            STOOD_DOWN = "stood_down"
+
+        class ConjunctionAlert(BaseModel):
+            id: str
+            primary_id: str
+            secondary_id: str
+            tca_utc: str
+            miss_distance_km: float
+            relative_velocity_kmps: float
+            status: ConjunctionStatus
+            created_at: str
 
         class TrackedObject(BaseModel):  # type: ignore[no-redef]
             norad_id: str
@@ -182,6 +217,103 @@ def propagate_many(
     }
 
 
+# ---------------------------------------------------------------------------
+# A3: Conjunction Detection, Pairwise Distance, and Hysteresis Logic
+# ---------------------------------------------------------------------------
+
+def pairwise_distance_km(
+    pos_a: tuple[float, float, float],
+    pos_b: tuple[float, float, float],
+) -> float:
+    """Straight-line Euclidean distance in km between two ECI coordinates."""
+    return math.sqrt(
+        (pos_a[0] - pos_b[0]) ** 2
+        + (pos_a[1] - pos_b[1]) ** 2
+        + (pos_a[2] - pos_b[2]) ** 2
+    )
+
+
+def relative_velocity_kmps(
+    vel_a: tuple[float, float, float],
+    vel_b: tuple[float, float, float],
+) -> float:
+    """Magnitude of relative velocity vector in km/s between two objects."""
+    return math.sqrt(
+        (vel_a[0] - vel_b[0]) ** 2
+        + (vel_a[1] - vel_b[1]) ** 2
+        + (vel_a[2] - vel_b[2]) ** 2
+    )
+
+
+def detect_conjunctions(
+    tracked_objects: list[TrackedObject] | None = None,
+    threshold_km: float = CONJUNCTION_THRESHOLD_KM,
+    hysteresis_km: float = HYSTERESIS_CLEAR_KM,
+    active_alerts: dict[tuple[str, str], ConjunctionAlert] | None = None,
+) -> list[ConjunctionAlert]:
+    """
+    A3 — Pairwise distance scanning with threshold & hysteresis logic.
+
+    Scans all pairs in `tracked_objects` (defaults to the seeded scenario if None).
+    Flags any pair whose separation is < threshold_km (5.0 km).
+    Applies hysteresis: existing alerts remain active until separation clears
+    beyond threshold_km (or hysteresis_km).
+
+    Returns a list of schema-valid ConjunctionAlert objects.
+    """
+    if tracked_objects is None:
+        try:
+            from backend.app.data.scenario import get_seeded_scenario_objects
+        except ImportError:
+            from app.data.scenario import get_seeded_scenario_objects
+        tracked_objects = get_seeded_scenario_objects()
+
+    alerts: list[ConjunctionAlert] = []
+    n = len(tracked_objects)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            obj_a = tracked_objects[i]
+            obj_b = tracked_objects[j]
+
+            dist_km = pairwise_distance_km(obj_a.position_km, obj_b.position_km)
+            rel_vel = relative_velocity_kmps(obj_a.velocity_kmps, obj_b.velocity_kmps)
+            pair_key = tuple(sorted([obj_a.norad_id, obj_b.norad_id]))
+
+            # Deterministic UUID based on pair and timestamp for repeatability
+            alert_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"conjunction_{pair_key[0]}_{pair_key[1]}"))
+
+            if dist_km < threshold_km:
+                alert = ConjunctionAlert(
+                    id=alert_id,
+                    primary_id=obj_a.norad_id,
+                    secondary_id=obj_b.norad_id,
+                    tca_utc=obj_a.timestamp_utc or datetime.now(timezone.utc).isoformat(),
+                    miss_distance_km=round(dist_km, 3),
+                    relative_velocity_kmps=round(rel_vel, 3),
+                    status=ConjunctionStatus.ALERTED,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                alerts.append(alert)
+            elif active_alerts and pair_key in active_alerts:
+                # Hysteresis check: if separation has now safely cleared
+                existing = active_alerts[pair_key]
+                if dist_km >= threshold_km:
+                    stood_down = ConjunctionAlert(
+                        id=existing.id,
+                        primary_id=existing.primary_id,
+                        secondary_id=existing.secondary_id,
+                        tca_utc=existing.tca_utc,
+                        miss_distance_km=round(dist_km, 3),
+                        relative_velocity_kmps=round(rel_vel, 3),
+                        status=ConjunctionStatus.STOOD_DOWN,
+                        created_at=existing.created_at,
+                    )
+                    alerts.append(stood_down)
+
+    return alerts
+
+
 if __name__ == "__main__":
     s = "1 25544U 98067A   19343.69339541  .00001764  00000-0  38792-4 0  9991"
     t = "2 25544  51.6439 211.2001 0007417  17.6667  85.6398 15.50103472202482"
@@ -191,3 +323,10 @@ if __name__ == "__main__":
     print(f"Propagated TrackedObject:\n  {obj}")
     print(f"Position (km): {obj.position_km}")
     print(f"Velocity (km/s): {obj.velocity_kmps}")
+
+    print("\n--- Running detect_conjunctions() on Seeded Scenario ---")
+    detected = detect_conjunctions()
+    print(f"Found {len(detected)} conjunction alerts:")
+    for alert in detected:
+        print(f"  Alert {alert.id}: {alert.primary_id} <-> {alert.secondary_id} "
+              f"at miss_distance={alert.miss_distance_km} km (status: {alert.status})")

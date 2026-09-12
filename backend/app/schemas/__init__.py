@@ -1,13 +1,13 @@
-from app.schemas.conjunction import ConjunctionAlert, ConjunctionStatus
-from app.schemas.negotiation import (
+from .conjunction import ConjunctionAlert, ConjunctionStatus
+from .negotiation import (
     AgentId,
     NegotiationMessage,
     ProposedAction,
     Resolution,
     ResolutionStatus,
 )
-from app.schemas.tracked_object import TrackedObject
-from app.schemas.websocket import ErrorPayload, EventType, WebSocketEnvelope
+from .tracked_object import TrackedObject
+from .websocket import ErrorPayload, EventType, WebSocketEnvelope
 
 __all__ = [
     "ConjunctionAlert",

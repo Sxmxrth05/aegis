@@ -14,9 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import WebSocket
-
-from app.schemas import ErrorPayload, EventType, WebSocketEnvelope
+try:
+    from backend.app.schemas import ErrorPayload, EventType, WebSocketEnvelope
+except ImportError:
+    from app.schemas import ErrorPayload, EventType, WebSocketEnvelope
 
 logger = logging.getLogger(__name__)
 

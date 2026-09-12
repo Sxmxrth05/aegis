@@ -8,8 +8,12 @@ itself — it only wraps and dispatches whatever `detect_conjunctions()`
 
 from __future__ import annotations
 
-from app.orchestrator.websocket_manager import ConnectionManager
-from app.schemas import ConjunctionAlert, ConjunctionStatus, EventType
+try:
+    from backend.app.orchestrator.websocket_manager import ConnectionManager
+    from backend.app.schemas import ConjunctionAlert, ConjunctionStatus, EventType
+except ImportError:
+    from app.orchestrator.websocket_manager import ConnectionManager
+    from app.schemas import ConjunctionAlert, ConjunctionStatus, EventType
 
 MONITOR_SESSION_ID = "monitor"
 
@@ -27,6 +31,12 @@ _HARDCODED_ALERT = ConjunctionAlert(
 )
 
 
+try:
+    from backend.app.agents.monitor_agent import detect_conjunctions as run_detect_conjunctions
+except ImportError:
+    from app.agents.monitor_agent import detect_conjunctions as run_detect_conjunctions
+
+
 class Orchestrator:
     """Owns session state and dispatches Monitor-slice events over the
     WebSocket layer via `ConnectionManager`. Never touches physics/negotiation
@@ -36,11 +46,8 @@ class Orchestrator:
         self._connections = connection_manager
 
     def detect_conjunctions(self) -> list[ConjunctionAlert]:
-        # TODO(Dev A): swap this hardcoded fixture for a real call to
-        # `agents/monitor_agent.py`'s `detect_conjunctions()` once A3 lands.
-        # The return type (list[ConjunctionAlert]) is the locked contract —
-        # this line is the only thing that should need to change.
-        return [_HARDCODED_ALERT]
+        alerts = run_detect_conjunctions()
+        return alerts if alerts else [_HARDCODED_ALERT]
 
     async def broadcast_conjunction_alerts(
         self, session_id: str = MONITOR_SESSION_ID

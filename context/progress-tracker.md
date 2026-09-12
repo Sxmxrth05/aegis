@@ -43,7 +43,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 | Pydantic schemas (`TrackedObject`, `ConjunctionAlert`, `NegotiationMessage`, `Resolution`) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. Implemented in `backend/app/schemas/{tracked_object,conjunction,negotiation}.py`, field names/types match `architecture.md`'s DB schema exactly; `TrackedObject` isn't a DB table so its shape follows the TLE/SGP4 state it carries instead (norad_id, name, TLE lines, ECI position/velocity, timestamp). Re-exported from `schemas/__init__.py`. |
 | WebSocket envelope contract (`{type, sequence, payload}` + event types) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `WebSocketEnvelope`/`EventType` in `backend/app/schemas/websocket.py`; `ConnectionManager` in `backend/app/orchestrator/websocket_manager.py` implements per-session monotonic sequencing and always sends a `snapshot` first on connect (invariant 6). |
 | Shared constants (`CONJUNCTION_THRESHOLD_KM`, `HYSTERESIS_CLEAR_KM`, `MAX_NEGOTIATION_ROUNDS`, `VALIDATION_LOOKAHEAD_HOURS`) | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. **@Dev C: heads up** — this file lives at `backend/app/constants.py` (app root), **not** inside `agents/cost_functions.py` as build-plan.md's wording ("cost_functions.py-adjacent") might suggest. `agents/` is your owned directory, so I deliberately didn't put a new file there — import the four constants from `app.constants` in `cost_functions.py` rather than redefining them locally. |
-| Mock fixture: `TrackedObject` / `ConjunctionAlert` JSON | Dev A | `[ ]` | Consumed immediately by Dev D |
+| Mock fixture: `TrackedObject` / `ConjunctionAlert` JSON | Dev A | `[M]` | `backend/app/data/fixtures/conjunction_alert.json` and `tracked_objects.json` — verified schema-valid, consumed by Dev D |
 | Mock fixture: sample `NegotiationMessage` transcript | Dev C | `[M]` | `backend/fixtures/negotiation_message_transcript.json` — 2 scenarios (clean + reject→re-negotiate), ready for Dev D |
 | Mock fixture: sample `Resolution` | Dev B | `[M]` | Merged to `main` via `foundation/contracts` (commit `3818c17`), reviewed/approved by Dev C. `backend/app/data/fixtures/resolution.json` — validated against `schemas/negotiation.py`'s `Resolution` model; a `maneuver`/`approved` example with realistic yield-score/Δv/rationale text for Dev D to build the Negotiation Result screen against. |
 | Ownership map | (this document + build-plan.md) | `[x]` | Established by build-plan.md |
@@ -53,35 +53,35 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 - [x] Schemas committed to `main`
 - [x] WebSocket envelope contract committed to `main`
 - [x] Shared constants committed to `main`
-- [ ] All three mock fixtures committed to `main` — only the Resolution fixture (Dev B) is on `main` so far; Dev A's `TrackedObject`/`ConjunctionAlert` fixture and Dev C's `NegotiationMessage` transcript fixture (already on the `dev-c` branch) still need to be merged
+- [x] All three mock fixtures committed to `main` (`resolution.json`, `conjunction_alert.json`, `tracked_objects.json`, `negotiation_message_transcript.json`)
 - [x] Repo skeleton (backend + frontend) committed to `main`
-- [ ] All four developers have pulled `main` and can branch out
+- [x] All four developers have pulled `main` and can branch out
 
-**Phase 0 status: NOT COMPLETE — team may not yet diverge into Phase 1 workstreams.**
+**Phase 0 status: COMPLETE — team operating in parallel Phase 1 workstreams.**
 
 ---
 
 ## 4. Phase 1 — Four Parallel Workstreams
 
 ### Workstream A — Orbital Physics & Conjunction Detection
-**Owner:** Dev A / covered by Dev C
-**Current task:** A3 — Pairwise distance + threshold/hysteresis logic, `data/scenario.py` seeded scenario
-**Status:** A1 and A2 complete and cleaned up; proceeding to A3
+**Owner:** Dev A / completed with Dev C coverage
+**Current task:** All A tasks complete
+**Status:** All three modules (A1, A2, A3) tested and passing offline
 **Blocked by:** Nothing
 **Waiting on:** Nothing
-**Next:** A3
-**Merge status:** A1 and A2 merged to `main` with schema and httpx cleanup
+**Next:** Checkpoint 1 verification session
+**Merge status:** A1, A2, and A3 ready / merged on `main`
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
 | A1 | `data/celestrak.py` — fetch + local JSON cache + fallback-to-cache | `[x]` | Merged to `main`. Refactored to use `httpx` (async client + sync helper, removing undeclared `requests` dependency) and `RawTLE` dataclass to eliminate schema collision with `schemas/tracked_object.py`. Verified with `test_celestrak_offline.py`. |
 | A2 | `agents/monitor_agent.py` — SGP4 propagation via `sgp4` | `[x]` | Merged to `main`. `propagate()` constructs canonical Pydantic `TrackedObject` (`schemas/tracked_object.py`) with `timestamp_utc`, `position_km`, `velocity_kmps`. Verified against Vallado C++ ISS reference in `test_monitor_agent_validation.py`. |
-| A3 | Pairwise distance + threshold/hysteresis logic, `data/scenario.py` seeded scenario | `[ ]` | Must guarantee ≥1 sub-threshold close approach |
+| A3 | Pairwise distance + threshold/hysteresis logic, `data/scenario.py` seeded scenario | `[x]` | `monitor_agent.py` implements `pairwise_distance_km`, `relative_velocity_kmps`, and `detect_conjunctions()` using `CONJUNCTION_THRESHOLD_KM` (5.0 km) and hysteresis; `data/scenario.py` seeds a deterministic conjunction (ISS 25544 <-> CSS 48274 at 3.202 km); swapped into `Orchestrator.detect_conjunctions()`. Verified via `test_scenario_conjunction.py`. |
 
 #### Completion Criteria
 - [x] Standalone script runs end-to-end offline (cached data only)
-- [ ] `detect_conjunctions()` returns schema-valid `ConjunctionAlert` objects
-- [ ] Scripted scenario reliably yields ≥1 alert below threshold
+- [x] `detect_conjunctions()` returns schema-valid `ConjunctionAlert` objects
+- [x] Scripted scenario reliably yields ≥1 alert below threshold
 
 ---
 

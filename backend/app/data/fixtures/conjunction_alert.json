@@ -1,0 +1,10 @@
+{
+  "id": "9f1c1e2a-4b3d-4a5e-9c6f-1a2b3c4d5e6f",
+  "primary_id": "25544",
+  "secondary_id": "48274",
+  "tca_utc": "2026-01-14T06:12:00Z",
+  "miss_distance_km": 3.2,
+  "relative_velocity_kmps": 7.5,
+  "status": "alerted",
+  "created_at": "2026-01-14T00:00:00Z"
+}
