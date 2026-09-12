@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 
 import earthBumpTexture from '../../assets/earth-bump.png';
 import earthNightTexture from '../../assets/earth-night.jpg';
+import { DOCKED_OBJECT_GROUPS } from './dockedGroups';
 import { positionKmToGeo } from './eciToGeo';
 import { GlobeHud } from './GlobeHud';
 import type { ConjunctionAlert, ManeuverTrajectoryResult, TrackedObject } from './types';
@@ -29,6 +30,61 @@ type GlobePoint = {
 };
 
 type OrbitTrail = GlobePoint & { endLat: number; endLng: number; endAlt: number };
+
+type ScreenPoint = GlobePoint & { x: number; y: number };
+type HudCluster = ScreenPoint & { count: number; members: GlobePoint[] };
+
+// Screen-space distance (px) below which two markers are considered
+// overlapping and get merged into one cluster marker. Docked objects (see
+// dockedGroups.ts) render at literally the same pixel; this also catches any
+// other incidental close approach on screen that isn't in that curated list.
+const CLUSTER_PIXEL_THRESHOLD = 18;
+
+function clusterHudPoints(screenPoints: ScreenPoint[]): HudCluster[] {
+  const used = new Set<string>();
+  const clusters: HudCluster[] = [];
+
+  // Pass 1: known docked/co-located groups get a named combined label.
+  for (const group of DOCKED_OBJECT_GROUPS) {
+    const members = screenPoints.filter((p) => !used.has(p.norad_id) && group.ids.has(p.norad_id));
+    if (members.length < 2) continue;
+    members.forEach((m) => used.add(m.norad_id));
+    clusters.push({
+      ...members[0],
+      name: group.label,
+      x: members.reduce((sum, m) => sum + m.x, 0) / members.length,
+      y: members.reduce((sum, m) => sum + m.y, 0) / members.length,
+      isFlagged: members.some((m) => m.isFlagged),
+      count: members.length,
+      members,
+    });
+  }
+
+  // Pass 2: generic proximity clustering for anything else still overlapping.
+  const remaining = screenPoints.filter((p) => !used.has(p.norad_id));
+  for (const point of remaining) {
+    if (used.has(point.norad_id)) continue;
+    const nearby = remaining.filter(
+      (other) => !used.has(other.norad_id) && Math.hypot(other.x - point.x, other.y - point.y) <= CLUSTER_PIXEL_THRESHOLD,
+    );
+    nearby.forEach((m) => used.add(m.norad_id));
+    if (nearby.length >= 2) {
+      clusters.push({
+        ...nearby[0],
+        name: 'OBJECT CLUSTER',
+        x: nearby.reduce((sum, m) => sum + m.x, 0) / nearby.length,
+        y: nearby.reduce((sum, m) => sum + m.y, 0) / nearby.length,
+        isFlagged: nearby.some((m) => m.isFlagged),
+        count: nearby.length,
+        members: nearby,
+      });
+    } else {
+      clusters.push({ ...point, count: 1, members: [point] });
+    }
+  }
+
+  return clusters;
+}
 
 const ACCENT_COLOR = '#60a5fa';
 const DANGER_COLOR = '#ff5b67';
@@ -123,7 +179,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
   const containerRef = useRef<HTMLDivElement>(null);
   const bloomRef = useRef<UnrealBloomPass | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [hudMarkers, setHudMarkers] = useState<Array<GlobePoint & { x: number; y: number }>>([]);
+  const [hudMarkers, setHudMarkers] = useState<HudCluster[]>([]);
   const globeMaterial = useMemo(() => new MeshPhongMaterial({
     color: '#bfd6f5',
     emissive: '#071a36',
@@ -174,10 +230,13 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
   const updateHud = useCallback(() => {
     const globe = globeRef.current;
     if (!globe) return;
-    setHudMarkers(points.map((point) => {
-      const screen = globe.getScreenCoords(point.lat, point.lng, point.alt);
-      return { ...point, x: screen.x, y: screen.y };
-    }).filter((point) => point.x >= 0 && point.y >= 0 && point.x <= size.width && point.y <= size.height));
+    const screenPoints = points
+      .map((point) => {
+        const screen = globe.getScreenCoords(point.lat, point.lng, point.alt);
+        return { ...point, x: screen.x, y: screen.y };
+      })
+      .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= size.width && point.y <= size.height);
+    setHudMarkers(clusterHudPoints(screenPoints));
   }, [points, size]);
 
   const configureScene = useCallback(() => {
@@ -299,7 +358,17 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
         pathDashGap={0.05}
         pathDashAnimateTime={3000}
       />
-      <GlobeHud markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged }) => ({ noradId: norad_id, name, x, y, flagged: isFlagged }))} />
+      <GlobeHud
+        markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged, count, members }) => ({
+          noradId: norad_id,
+          name,
+          x,
+          y,
+          flagged: isFlagged,
+          count,
+          members: members.map((m) => ({ noradId: m.norad_id, name: m.name })),
+        }))}
+      />
     </div>
   );
 }
