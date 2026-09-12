@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { Badge } from '../shared/Badge';
 import { Card } from '../shared/Card';
+import { Button } from '../shared/Button';
 import type { Resolution } from '../globe/types';
 
 export function ResolutionCard({ resolution }: { resolution: Resolution | null }) {
@@ -25,6 +27,14 @@ export function ResolutionCard({ resolution }: { resolution: Resolution | null }
       <p className="mt-4 text-sm leading-relaxed text-text-secondary">
         {resolution.rationale_text}
       </p>
+
+      {isSuccess && (
+        <div className="mt-4">
+          <Link to={`/negotiate/${resolution.conjunction_id}/trajectory`}>
+            <Button variant="secondary" className="px-3 py-1.5 text-xs">View Trajectory Simulation</Button>
+          </Link>
+        </div>
+      )}
 
       {isSuccess && (
         <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-4">
@@ -57,3 +67,4 @@ export function ResolutionCard({ resolution }: { resolution: Resolution | null }
     </Card>
   );
 }
+

@@ -9,7 +9,7 @@ import { Card } from '../components/shared/Card';
 import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
 import type { ConjunctionStatus, TrackedObject } from '../components/globe/types';
 import { buildNegotiationWsUrl, useAegisSocket } from '../lib/websocket';
-import { useNegotiationStore, type WebSocketEnvelope } from '../store/useNegotiationStore';
+import { useNegotiationStore } from '../store/useNegotiationStore';
 
 const EARTH_RADIUS_KM = 6371;
 

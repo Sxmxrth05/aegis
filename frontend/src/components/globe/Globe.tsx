@@ -3,7 +3,7 @@ import ReactGlobe, { type GlobeMethods } from 'react-globe.gl';
 import earthNightTexture from '../../assets/earth-night.jpg';
 
 import { positionKmToGeo } from './eciToGeo';
-import type { ConjunctionAlert, TrackedObject } from './types';
+import type { ConjunctionAlert, TrackedObject, ManeuverTrajectoryResult } from './types';
 
 export type GlobeMode = 'live' | 'conjunction' | 'trajectory';
 
@@ -11,6 +11,7 @@ type Props = {
   trackedObjects: TrackedObject[];
   mode: GlobeMode;
   conjunctionAlert?: ConjunctionAlert;
+  trajectoryResult?: ManeuverTrajectoryResult;
   className?: string;
 };
 
@@ -33,7 +34,7 @@ type GlobeRing = {
 const ACCENT_COLOR = '#3b82f6';
 const DANGER_COLOR = '#ef4444';
 
-export function Globe({ trackedObjects, mode, conjunctionAlert, className = '' }: Props) {
+export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult, className = '' }: Props) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -80,6 +81,16 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, className = '' }
     return points.filter((p) => p.isFlagged).map(({ lat, lng }) => ({ lat, lng }));
   }, [mode, conjunctionAlert, points]);
 
+  const pathsData = useMemo(() => {
+    if (mode !== 'trajectory' || !trajectoryResult) return [];
+    const convert = (path: [number, number, number][]) => path.map(([lng, lat, alt]) => ({ lat, lng, alt }));
+    return [
+      { coords: convert(trajectoryResult.nominal_path_primary), color: '#9ca3b8' }, // text-secondary
+      { coords: convert(trajectoryResult.nominal_path_secondary), color: '#9ca3b8' },
+      { coords: convert(trajectoryResult.maneuvered_path), color: '#3b82f6' } // accent
+    ];
+  }, [mode, trajectoryResult]);
+
   return (
     <div ref={containerRef} className={`relative h-full w-full ${className}`}>
       <ReactGlobe
@@ -96,31 +107,25 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, className = '' }
         pointAltitude="alt"
         pointColor={(p) => ((p as GlobePoint).isFlagged ? DANGER_COLOR : ACCENT_COLOR)}
         pointRadius={(p) => ((p as GlobePoint).isFlagged ? 0.6 : 0.35)}
-        // Each point renders as a cylinder extruded to the satellite's real
-        // altitude; three-globe's default pointResolution (12-sided cross
-        // section) is visibly faceted at this scale, especially near the
-        // globe's limb where perspective stretches it further — reads as a
-        // jagged streak rather than a clean pin. A higher resolution fixes
-        // the geometry itself, independent of the ring-fade fix above.
         pointResolution={32}
         pointLabel={(p) => `${(p as GlobePoint).name} (${(p as GlobePoint).norad_id})`}
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
-        // Each ring's color is itself a function of its animation progress
-        // (t: 0 -> 1) — fading opacity as it expands is what makes a single
-        // pulse read as clean, rather than a solid outline. ringMaxRadius /
-        // ringPropagationSpeed gives one ring's full lifetime (here 1.5s);
-        // ringRepeatPeriod is set slightly longer than that so each pulse
-        // fully fades out before the next one starts — no overlapping
-        // generations, which is what was producing the scratchy look near
-        // the globe's limb (multiple solid-opacity rings stacked at
-        // different radii, each already stretched by perspective).
         ringColor={() => (t: number) => `rgba(239, 68, 68, ${1 - t})`}
         ringResolution={128}
         ringMaxRadius={3}
         ringPropagationSpeed={2}
         ringRepeatPeriod={1600}
+        pathsData={pathsData}
+        pathPoints="coords"
+        pathPointLat="lat"
+        pathPointLng="lng"
+        pathPointAlt="alt"
+        pathColor="color"
+        pathDashLength={0.1}
+        pathDashGap={0.05}
+        pathDashAnimateTime={3000}
       />
     </div>
   );

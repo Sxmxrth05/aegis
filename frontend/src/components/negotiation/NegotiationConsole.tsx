@@ -52,3 +52,4 @@ export function NegotiationConsole({ messages }: { messages: NegotiationMessage[
     </div>
   );
 }
+

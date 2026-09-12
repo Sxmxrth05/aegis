@@ -60,3 +60,45 @@ export type Resolution = {
   status: ResolutionStatus;
 };
 
+export type TrajectoryWaypoint = {
+  timestamp_utc: string;
+  t_seconds: number;
+  position_km: [number, number, number];
+  velocity_kmps: [number, number, number];
+  lat: number;
+  lng: number;
+  alt_km: number;
+};
+
+export type TrajectoryStep = {
+  timestamp_utc: string;
+  t_seconds: number;
+  is_post_burn: boolean;
+  nominal_primary: TrajectoryWaypoint;
+  nominal_secondary: TrajectoryWaypoint;
+  nominal_distance_km: number;
+  maneuvered_primary: TrajectoryWaypoint;
+  maneuvered_secondary: TrajectoryWaypoint;
+  maneuvered_distance_km: number;
+};
+
+export type ManeuverTrajectoryResult = {
+  conjunction_id: string;
+  primary_norad_id: string;
+  primary_name: string;
+  secondary_norad_id: string;
+  secondary_name: string;
+  maneuvering_norad_id: string;
+  maneuver_type: string;
+  delta_v_mps: number;
+  execution_time_utc: string;
+  tca_nominal_utc: string;
+  min_distance_nominal_km: number;
+  tca_maneuvered_utc: string;
+  min_distance_maneuvered_km: number;
+  cleared_threshold: boolean;
+  steps: TrajectoryStep[];
+  nominal_path_primary: [number, number, number][];
+  nominal_path_secondary: [number, number, number][];
+  maneuvered_path: [number, number, number][];
+};

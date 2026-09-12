@@ -134,10 +134,8 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 ### Workstream D — Frontend Experience & WebSocket Client
 **Owner:** Dev D
 **Current task:** D Phase 2 — History table
-**Status:** Negotiation Console and Result Card complete and wired
-**Blocked by:** Nothing
-**Waiting on:** Nothing
-**Next:** History table then empty state for no safe maneuver
+**Status:** All Phase 2 screens (Negotiation Console, Result Card, History Table, Trajectory Simulation) complete and wired.
+**Next:** Phase 3 Demo Hardening and end-to-end integration tests.
 **Merge status:** D1 (`main`), D3 (`dev-d/shared-primitives`), D4 (`dev-d/globe-component` + follow-up fixes on `dev-d/globe-fixes`), D5 and D6 (`dev-d/globe-fixes`) all merged to `main`. D2 not started.
 
 | Task ID | Task | Status | Notes |
@@ -257,18 +255,18 @@ _No checkpoint session has occurred yet._
 
 ### Workstream D — Negotiation & Resolution UI
 **Owner:** Dev D (opportunistic pairing with A/B once their Phase 2 tasks land) — Conjunction Details covered by Dev B while Dev D is tied up
-**Status:** Conjunction Details screen built and live-verified; remaining screens not started
-**Depends on:** Mock transcript/resolution fixtures (Phase 0), then Dev B/C's live events
-**Next:** Negotiation Console (two-column transcript) — the console itself, not just the trigger button this task stopped short of
+**Status:** All Phase 2 screens (Negotiation Console, Result Card, History Table, Trajectory Simulation) complete and wired.
+**Depends on:** Dev A backend for trajectory and history APIs (implemented).
+**Next:** Phase 3 Demo Hardening and end-to-end integration tests.
 
 | Task | Status | Notes |
 |---|---|---|
 | Conjunction Details screen | `[x]` | Dev B (covering Dev D). Not yet merged. Built directly against real live data in `pages/Negotiate.tsx` — skipped the mock-first step since real `activeConjunctionAlert`/`trackedObjects` were already flowing through `useNegotiationStore` by this point (Checkpoint-1-equivalent pieces already merged). Side-by-side satellite stat cards show real computed `Altitude`/`Velocity` (from `position_km`/`velocity_kmps`) plus `Operator`/`Fuel Δv margin`/`Mission priority`/`Maneuverability` as explicit `TBD` — those concepts exist backend-side (`OperatorProfile`) but aren't in any payload the frontend receives pre-negotiation, so TBD rather than fabricated. Conjunction Assessment card shows real `tca_utc`/`miss_distance_km`/`relative_velocity_kmps`, `Collision probability` as `TBD` (no such field in the schema). Built entirely from D3's `Button`/`Card`/`Badge`. **"Start Agent Negotiation" button** opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (via a new options-based variant of `useAegisSocket()` — see `lib/websocket.ts` in ui-registry.md's Data Layer section) and logs every envelope to console with a live count — **this is intentionally not the Negotiation Console yet**, just proof the trigger works end-to-end; the console/transcript UI is the next task. **Verified live** (not mocked): loaded `/negotiate` with the real backend running, confirmed real satellite names/NORAD IDs/computed altitude-velocity/TCA/miss-distance render (not mock fixture text); clicked the button and confirmed via headless-Chromium console capture that `snapshot` → 3× `negotiation_message` → `resolution` all arrived in order with correct sequence numbers, screenshotted before and after. |
-| Negotiation Console (two-column transcript, round-stage tracker) | `[ ]` | Mock transcript first, then Dev B's live events |
-| Negotiation Result screen | `[ ]` | Mock resolution first |
-| "No Safe Maneuver Found" state | `[ ]` | Explicit, honest UI treatment (invariant 9) |
-| History table (filterable) | `[ ]` | Wired to Dev A's `db.py` queries once available |
-| Trajectory Simulation screen (joint with Dev A) | `[ ]` | Reuses existing Globe component — no second globe (invariant 12) |
+| Negotiation Console (two-column transcript, round-stage tracker) | `[x]` | Built in `NegotiationConsole.tsx`, wired in `Negotiate.tsx`. |
+| Negotiation Result screen | `[x]` | Built in `ResolutionCard.tsx` |
+| "No Safe Maneuver Found" state | `[x]` | Handled inherently in `ResolutionCard.tsx` (explicit title change and layout adaptation when isSuccess is false). |
+| History table (filterable) | `[x]` | Built in `pages/History.tsx`. Wired to Dev A's `db.py` via `/api/history` REST endpoint. |
+| Trajectory Simulation screen (joint with Dev A) | `[x]` | Built in `pages/Trajectory.tsx`. Reuses existing Globe component, adds timeline scrubber and mode="trajectory". Fetches from `/api/trajectory/:id`. |
 
 **Completion criteria:**
 - [ ] Every screen above demoable against mock data before being wired live
