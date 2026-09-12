@@ -224,3 +224,61 @@ def test_max_negotiation_rounds_default_from_constants(scenario_setup):
     assert engine.max_rounds == MAX_NEGOTIATION_ROUNDS
     assert engine.max_rounds == 3
 
+
+def test_max_negotiation_rounds_three_full_attempts_before_escalation(scenario_setup):
+    """
+    Verifies that with max_rounds=3, when validation rejects rounds 1 and 2,
+    round 3 genuinely attempts a counter-proposal before escalating on that
+    third rejection (not cutting off before round 3 runs).
+    """
+    s = scenario_setup
+    with patch("backend.app.agents.negotiator.run_validation_check") as mock_val:
+        # All validation checks reject
+        mock_val.return_value = ValidationResult(
+            outcome="reject_secondary_risk",
+            residual_risk=1.1,
+            min_distance_found_km=1.1,
+            nearest_third_object="DEBRIS-TEST",
+            rationale="Secondary conjunction detected on all attempts.",
+            lookahead_hours=6.0,
+        )
+
+        engine = NegotiationEngine(
+            alert=s["alert"],
+            profile_a=s["profile_a"],
+            profile_b=s["profile_b"],
+            sat_a_state=s["sat_a"],
+            sat_b_state=s["sat_b"],
+            all_tracked_objects=s["all_objects"],
+            max_rounds=3,
+        )
+
+        transcript, resolution = engine.run_negotiation(force_initial_rejection=True)
+
+        # Verify Round 1: Operator A (stand_down), Operator B (maneuver), Validation (reject)
+        r1_msgs = [m for m in transcript if m.round == 1]
+        assert len(r1_msgs) == 3
+        assert r1_msgs[-1].agent_id == AgentId.VALIDATION and r1_msgs[-1].proposed_action == ProposedAction.REJECT
+
+        # Verify Round 2: Operator A steps in (maneuver), Validation (reject)
+        r2_msgs = [m for m in transcript if m.round == 2]
+        assert len(r2_msgs) == 2
+        assert r2_msgs[0].agent_id == AgentId.OPERATOR_A and r2_msgs[0].proposed_action == ProposedAction.MANEUVER
+        assert r2_msgs[1].agent_id == AgentId.VALIDATION and r2_msgs[1].proposed_action == ProposedAction.REJECT
+
+        # Verify Round 3: Operator B counter-proposes (maneuver), Validation (reject)
+        r3_msgs = [m for m in transcript if m.round == 3]
+        assert len(r3_msgs) == 2
+        assert r3_msgs[0].agent_id == AgentId.OPERATOR_B and r3_msgs[0].proposed_action == ProposedAction.MANEUVER
+        assert r3_msgs[1].agent_id == AgentId.VALIDATION and r3_msgs[1].proposed_action == ProposedAction.REJECT
+
+        # Total 7 messages across 3 full rounds
+        assert len(transcript) == 7
+        assert mock_val.call_count == 3, f"Validation should be called 3 times, got {mock_val.call_count}"
+
+        # Final resolution is escalated only AFTER round 3's rejection
+        assert resolution.status == ResolutionStatus.NO_SAFE_MANEUVER_FOUND
+        assert resolution.maneuvering_agent == "none"
+        assert "maximum negotiation rounds (3)" in resolution.rationale_text
+
+
