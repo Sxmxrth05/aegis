@@ -273,6 +273,25 @@ a {
   }
 }
 
+@keyframes orbital-ambient-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.16), 0 12px 32px -8px rgba(10, 14, 23, 0.85);
+  }
+  50% {
+    box-shadow: 0 0 20px 2px rgba(59, 130, 246, 0.22), 0 0 0 1px rgba(59, 130, 246, 0.42), 0 16px 36px -8px rgba(10, 14, 23, 0.95);
+  }
+}
+
+.orbital-ambient-glow {
+  animation: orbital-ambient-glow 6s ease-in-out infinite;
+}
+
+/* Cesium UI cleanup for embedded mission control instrument */
+.cesium-credit-container,
+.cesium-widget-credits {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
