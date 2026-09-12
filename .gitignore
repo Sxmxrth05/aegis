@@ -26,3 +26,5 @@ backend/app/data/cache/*.json
 # OS / editor
 .DS_Store
 *.pem
+
+.agents

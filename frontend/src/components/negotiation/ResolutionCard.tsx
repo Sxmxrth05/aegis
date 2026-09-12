@@ -1,70 +1,61 @@
 import { Link } from 'react-router-dom';
-import { Badge } from '../shared/Badge';
-import { Card } from '../shared/Card';
-import { Button } from '../shared/Button';
+
 import type { Resolution } from '../globe/types';
 
 export function ResolutionCard({ resolution }: { resolution: Resolution | null }) {
   if (!resolution) return null;
 
   const isSuccess = resolution.status.startsWith('approved');
-  const badgeStatus = isSuccess ? 'success' : 'danger';
+  const tone = isSuccess
+    ? 'border-success/40 bg-success-muted/20 text-success-light'
+    : 'border-danger/40 bg-danger-muted/20 text-danger-light';
 
   return (
-    <Card className={`mt-6 border-2 ${isSuccess ? 'border-success-muted' : 'border-danger-muted'}`}>
-      <div className="flex items-start justify-between">
+    <section className={`mt-5 border ${tone}`} aria-labelledby="resolution-title">
+      <header className="grid gap-4 border-b border-current/20 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-text-muted">Final Resolution</p>
-          <h3 className="mt-1 text-xl font-bold text-text-primary">
-            {resolution.status === 'no_safe_maneuver_found' 
-              ? 'No Safe Maneuver Found' 
-              : 'Maneuver Plan Approved'}
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] opacity-80">Final decision record</p>
+          <h3 id="resolution-title" className="mt-1 text-xl font-semibold tracking-tight text-text-primary">
+            {resolution.status === 'no_safe_maneuver_found' ? 'No safe maneuver found' : 'Maneuver plan approved'}
           </h3>
         </div>
-        <Badge status={badgeStatus}>{resolution.status.replace(/_/g, ' ')}</Badge>
+        <span className="w-fit border border-current/35 px-2.5 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider">
+          {resolution.status.replace(/_/g, ' ')}
+        </span>
+      </header>
+
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_2fr]">
+        <div className="border-b border-current/20 p-5 lg:border-b-0 lg:border-r">
+          <p className="font-mono text-[8px] uppercase tracking-wider opacity-70">Resolution rationale</p>
+          <p className="mt-3 max-w-[60ch] text-sm leading-6 text-text-secondary">{resolution.rationale_text}</p>
+          {isSuccess && (
+            <Link
+              to={`/negotiate/${resolution.conjunction_id}/trajectory`}
+              className="mt-6 inline-flex border-b border-current pb-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+            >
+              Inspect trajectory →
+            </Link>
+          )}
+        </div>
+
+        {isSuccess && (
+          <dl className="grid grid-cols-2 gap-px bg-current/20 sm:grid-cols-3">
+            {[
+              ['Maneuvering agent', resolution.maneuvering_agent],
+              ['Maneuver type', resolution.maneuver_type],
+              ['Delta-V', `${resolution.delta_v_mps.toFixed(3)} m/s`],
+              ['Expected miss', `${resolution.expected_min_distance_km.toFixed(3)} km`],
+              ['Residual risk', `${(resolution.residual_risk * 100).toExponential(2)}%`],
+              ['Execution UTC', resolution.execution_time_utc],
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0 bg-surface-muted p-4">
+                <dt className="font-mono text-[8px] uppercase tracking-wider text-text-muted">{label}</dt>
+                <dd className="mt-2 break-words font-mono text-xs font-medium tabular-nums text-text-primary">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
-
-      <p className="mt-4 text-sm leading-relaxed text-text-secondary">
-        {resolution.rationale_text}
-      </p>
-
-      {isSuccess && (
-        <div className="mt-4">
-          <Link to={`/negotiate/${resolution.conjunction_id}/trajectory`}>
-            <Button variant="secondary" className="px-3 py-1.5 text-xs">View Trajectory Simulation</Button>
-          </Link>
-        </div>
-      )}
-
-      {isSuccess && (
-        <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-4">
-          <div>
-            <dt className="text-xs text-text-muted">Maneuvering Agent</dt>
-            <dd className="font-mono text-sm font-semibold text-text-primary">{resolution.maneuvering_agent}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Type</dt>
-            <dd className="font-mono text-sm text-text-primary">{resolution.maneuver_type}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Delta-V</dt>
-            <dd className="font-mono text-sm font-semibold text-text-primary">{resolution.delta_v_mps.toFixed(3)} m/s</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Residual Risk</dt>
-            <dd className="font-mono text-sm text-text-primary">{(resolution.residual_risk * 100).toExponential(2)}%</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Expected Miss Distance</dt>
-            <dd className="col-span-2 font-mono text-sm text-text-primary">{resolution.expected_min_distance_km.toFixed(3)} km</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Execution Time</dt>
-            <dd className="col-span-2 font-mono text-sm text-text-primary">{resolution.execution_time_utc}</dd>
-          </div>
-        </div>
-      )}
-    </Card>
+    </section>
   );
 }
-

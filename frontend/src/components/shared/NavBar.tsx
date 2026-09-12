@@ -24,26 +24,29 @@ export function NavBar() {
   const { label, dotClassName } = STATUS_DISPLAY[connectionStatus];
 
   return (
-    <header className="h-16 border-b border-border bg-surface flex items-center justify-between px-8">
-      <NavLink to="/" className="text-text-primary font-semibold tracking-tight">
-        Aegis
+    <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-4 sm:px-8">
+      <NavLink
+        to="/"
+        className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      >
+        Aegis<span className="text-accent">/</span>Ops
       </NavLink>
-      <nav className="flex items-center gap-6">
+      <nav className="flex items-center gap-3 sm:gap-6" aria-label="Primary navigation">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
             className={({ isActive }) =>
               isActive
-                ? 'text-text-primary text-sm font-medium'
-                : 'text-text-secondary text-sm hover:text-text-primary'
+                ? 'border-b border-accent pb-1 font-mono text-[10px] font-medium uppercase tracking-wider text-text-primary'
+                : 'border-b border-transparent pb-1 font-mono text-[10px] uppercase tracking-wider text-text-secondary transition-colors hover:border-border-light hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent'
             }
           >
             {link.label}
           </NavLink>
         ))}
       </nav>
-      <div className="flex items-center gap-2 text-xs text-text-muted">
+      <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-wider text-text-muted">
         <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
         {label}
       </div>

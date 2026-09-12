@@ -1,213 +1,231 @@
 import { Link } from 'react-router-dom';
-import { Badge } from '../components/shared/Badge';
-import { Button } from '../components/shared/Button';
-import { Card } from '../components/shared/Card';
 
-// ─── Headline stats ──────────────────────────────────────────────────────────
-// Numbers are from the curated demo set / project framing — clearly labeled as
-// simulation values so judges can ask "where do these come from" and get a
-// concrete answer. Not fabricated; they reflect the scripted scenario's scope.
-const STATS = [
+const TELEMETRY = [
+  { value: '27,000+', label: 'catalogued objects', detail: 'active spacecraft + debris' },
+  { value: '~1,400', label: 'weekly approaches', detail: 'screened across LEO' },
+  { value: '05.000 km', label: 'alert threshold', detail: 'deterministic trigger' },
+  { value: '06 h', label: 'validation horizon', detail: 'secondary-risk sweep' },
+];
+
+const PIPELINE = [
   {
-    value: '27,000+',
-    label: 'Objects tracked',
-    sub: 'active satellites + debris in LEO',
-    status: 'active' as const,
+    code: 'MON',
+    state: 'ACTIVE',
+    title: 'Conjunction monitor',
+    detail: 'CelesTrak TLE → SGP4 propagation → pairwise screen',
+    output: 'ConjunctionAlert',
   },
   {
-    value: '~1,400',
-    label: 'Close approaches',
-    sub: 'flagged per week across LEO',
-    status: 'warning' as const,
+    code: 'NEG',
+    state: 'ARMED',
+    title: 'Operator negotiation',
+    detail: 'Mission value + fuel margin + maneuver cost',
+    output: 'NegotiationMessage',
   },
   {
-    value: '< 2 min',
-    label: 'Negotiation time',
-    sub: 'autonomous agent convergence',
-    status: 'success' as const,
+    code: 'VAL',
+    state: 'GATED',
+    title: 'Safety validation',
+    detail: 'Six-hour propagation against the tracked set',
+    output: 'approve / reject',
   },
   {
-    value: '0',
-    label: 'Human approvals needed',
-    sub: 'deterministic + validated resolution',
-    status: 'active' as const,
+    code: 'RES',
+    state: 'READY',
+    title: 'Resolution record',
+    detail: 'Maneuver, Δv, execution UTC, residual risk',
+    output: 'Resolution',
   },
 ];
 
-// ─── How it works steps ──────────────────────────────────────────────────────
-const STEPS = [
-  {
-    n: '01',
-    heading: 'Detect',
-    body: 'Real TLE data from CelesTrak is ingested and propagated via SGP4. Pairwise conjunction screening flags any close approach below the threshold — deterministically, no LLM involved.',
-  },
-  {
-    n: '02',
-    heading: 'Negotiate',
-    body: 'Two autonomous operator agents exchange proposals over multiple rounds. A deterministic yield_score (mission priority × fuel margin × Δv cost) decides who yields — the LLM only narrates the pre-computed number.',
-  },
-  {
-    n: '03',
-    heading: 'Validate',
-    body: 'A third Validation Agent re-propagates the proposed maneuver 6 hours forward to confirm it creates no secondary conjunctions. If it fails, the agents re-negotiate with an added constraint.',
-  },
-  {
-    n: '04',
-    heading: 'Resolve',
-    body: 'The agreed maneuver plan — Δv, execution time, projected miss distance, residual risk — is emitted as an auditable Resolution. The globe updates to reflect the new trajectory.',
-  },
-];
+function StatusMark({ tone = 'success' }: { tone?: 'success' | 'warning' | 'danger' }) {
+  const color = {
+    success: 'bg-success shadow-[0_0_8px_var(--color-success)]',
+    warning: 'bg-warning shadow-[0_0_8px_var(--color-warning)]',
+    danger: 'bg-danger shadow-[0_0_8px_var(--color-danger)]',
+  }[tone];
+
+  return <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 ${color}`} />;
+}
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
-        {/* Subtle radial glow behind the hero — purely decorative */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.12) 0%, transparent 70%)',
-          }}
-        />
-
-        <div className="relative mx-auto max-w-[1440px] px-8 pb-20 pt-24">
-          {/* Eyebrow */}
-          <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-text-muted">
-            Autonomous Multi-Agent Orbital Safety
-          </p>
-
-          {/* Heading */}
-          <h1 className="max-w-3xl text-5xl font-bold leading-tight tracking-tight text-text-primary sm:text-6xl">
-            When satellites collide,{' '}
-            <span
-              className="text-accent"
-              style={{ textShadow: '0 0 32px rgba(59,130,246,0.4)' }}
-            >
-              Aegis negotiates.
-            </span>
-          </h1>
-
-          {/* Sub-headline */}
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-text-secondary">
-            Real TLE data. Deterministic cost functions. Autonomous agents that detect a shared
-            conjunction, negotiate who maneuvers, validate the plan, and resolve it — in under two
-            minutes, without a human in the loop.
-          </p>
-
-          {/* CTAs */}
-          <div className="mt-10 flex flex-wrap items-center gap-4">
-            <Link to="/monitor">
-              <Button variant="primary" className="px-6 py-2.5 text-sm">
-                Explore Live Map →
-              </Button>
-            </Link>
-            <Link to="/negotiate">
-              <Button variant="secondary" className="px-6 py-2.5 text-sm">
-                Watch Negotiation
-              </Button>
-            </Link>
-          </div>
-
-          {/* Trust line */}
-          <p className="mt-6 text-xs text-text-muted">
-            Built on{' '}
-            <span className="text-text-secondary">CelesTrak TLE data</span>,{' '}
-            <span className="text-text-secondary">SGP4 propagation</span>, and{' '}
-            <span className="text-text-secondary">Claude claude-sonnet-4-6</span> — numbers from
-            deterministic Python, narration from LLM.
-          </p>
-        </div>
-      </section>
-
-      {/* ── Stat cards ────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-[1440px] px-8 pb-20">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {STATS.map((stat) => (
-            <Card key={stat.label} className="p-6">
-              <div className="mb-3">
-                <Badge status={stat.status}>{stat.status === 'active' ? 'Live' : stat.status === 'warning' ? 'Scale' : stat.status === 'success' ? 'Autonomous' : 'Live'}</Badge>
+    <main className="ops-grid min-h-screen bg-background text-text-primary">
+      <section className="border-b border-border">
+        <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
+          <div className="relative overflow-hidden border-border px-6 py-14 sm:px-8 lg:border-r lg:px-12 lg:py-20">
+            <div className="scan-beam" aria-hidden="true" />
+            <div className="relative z-10 max-w-4xl">
+              <div className="mb-10 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                <span className="flex items-center gap-2 text-success-light">
+                  <StatusMark /> node online
+                </span>
+                <span>AEGIS / OPS-01</span>
+                <span>UTC synchronized</span>
               </div>
-              <p className="font-mono text-3xl font-bold text-text-primary">{stat.value}</p>
-              <p className="mt-1 text-sm font-medium text-text-primary">{stat.label}</p>
-              <p className="mt-1 text-xs text-text-muted">{stat.sub}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
 
-      {/* ── How it works ──────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-[1440px] px-8 pb-24">
-        {/* Section header */}
-        <div className="mb-10 border-b border-border pb-6">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-text-muted">
-            Under the Hood
-          </p>
-          <h2 className="text-2xl font-semibold text-text-primary">How Aegis works</h2>
-          <p className="mt-2 max-w-xl text-sm text-text-secondary">
-            Four deterministic steps — no black-box AI decisions. Every number the agents reference
-            traces back to a Python calculation you can audit.
-          </p>
-        </div>
+              <p className="mb-3 font-mono text-xs uppercase tracking-[0.24em] text-accent-light">
+                autonomous orbital deconfliction
+              </p>
+              <h1 className="max-w-4xl text-balance text-[clamp(3rem,7vw,6.8rem)] font-semibold uppercase leading-[0.86] tracking-[-0.055em]">
+                Traffic conflict.
+                <span className="mt-2 block text-text-secondary">Resolution computed.</span>
+              </h1>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {STEPS.map((step) => (
-            <Card key={step.n} className="flex flex-col gap-3 p-6">
-              {/* Step number — accent accent, mono */}
-              <span className="font-mono text-xs font-semibold text-accent">{step.n}</span>
-              <h3 className="text-base font-semibold text-text-primary">{step.heading}</h3>
-              <p className="text-sm leading-relaxed text-text-secondary">{step.body}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Demo CTA banner ───────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-[1440px] px-8 pb-24">
-        <div
-          className="rounded-xl border border-border bg-surface-secondary p-10 text-center"
-          style={{
-            background:
-              'linear-gradient(135deg, rgba(16,21,31,1) 0%, rgba(30,58,95,0.3) 100%)',
-          }}
-        >
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
-            Live demo
-          </p>
-          <h2 className="text-2xl font-semibold text-text-primary">
-            Watch two agents negotiate a real conjunction
-          </h2>
-          <p className="mx-auto mt-3 max-w-lg text-sm text-text-secondary">
-            The scripted scenario seeds a guaranteed close approach between ISS and CSS Tianhe at
-            3.2 km miss distance. Open the Monitor to see the detection, then step through the
-            negotiation to watch agents resolve it.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link to="/monitor">
-              <Button variant="primary" className="px-6 py-2.5">
-                Open Monitor →
-              </Button>
-            </Link>
-            <Link to="/negotiate">
-              <Button variant="secondary" className="px-6 py-2.5">
-                Jump to Negotiation
-              </Button>
-            </Link>
+              <div className="mt-10 grid max-w-3xl gap-8 border-l border-accent pl-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <p className="max-w-[62ch] text-sm leading-6 text-text-secondary sm:text-base">
+                  Aegis detects close approaches, assigns maneuver responsibility through deterministic
+                  cost functions, and validates the resulting trajectory before a plan is released.
+                  Language models explain the record; they never produce safety-critical numbers.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Link
+                    to="/monitor"
+                    className="bg-accent px-5 py-3 font-mono text-xs font-semibold uppercase tracking-wider text-white transition duration-200 hover:bg-accent-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:translate-y-px"
+                  >
+                    Open monitor ↗
+                  </Link>
+                  <Link
+                    to="/negotiate"
+                    className="border-b border-border-light px-1 py-3 font-mono text-xs uppercase tracking-wider text-text-secondary transition duration-200 hover:border-accent hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                  >
+                    View ledger
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <aside className="relative bg-surface-muted/80 px-6 py-8 sm:px-8 lg:px-7 lg:py-10" aria-label="Active conjunction snapshot">
+            <div className="flex items-start justify-between border-b border-border pb-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">Priority queue / 01</p>
+                <h2 className="mt-2 text-lg font-semibold">Active conjunction</h2>
+              </div>
+              <span className="flex items-center gap-2 border border-danger/30 bg-danger-muted/50 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-danger-light">
+                <StatusMark tone="danger" /> alerted
+              </span>
+            </div>
+
+            <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">Primary / 25544</p>
+                <p className="mt-1 text-xl font-semibold">ISS</p>
+                <p className="text-xs text-text-secondary">ZARYA</p>
+              </div>
+              <div className="relative h-px w-14 bg-danger/50">
+                <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border border-danger bg-background" />
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">Secondary / 48274</p>
+                <p className="mt-1 text-xl font-semibold">CSS</p>
+                <p className="text-xs text-text-secondary">TIANHE</p>
+              </div>
+            </div>
+
+            <dl className="mt-8 divide-y divide-border-muted border-y border-border">
+              <div className="grid grid-cols-2 py-3">
+                <dt className="text-xs text-text-muted">Predicted miss</dt>
+                <dd className="text-right font-mono text-sm font-semibold text-danger-light">3.202 km</dd>
+              </div>
+              <div className="grid grid-cols-2 py-3">
+                <dt className="text-xs text-text-muted">Relative velocity</dt>
+                <dd className="text-right font-mono text-sm text-text-primary">9.052 km/s</dd>
+              </div>
+              <div className="grid grid-cols-2 py-3">
+                <dt className="text-xs text-text-muted">Decision source</dt>
+                <dd className="text-right font-mono text-[11px] uppercase text-success-light">Python / deterministic</dd>
+              </div>
+            </dl>
+
+            <div className="mt-7 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-text-muted">
+              <span>cached scenario ready</span>
+              <span className="text-warning-light">awaiting operator trigger</span>
+            </div>
+          </aside>
         </div>
       </section>
 
-      {/* ── Footer note ───────────────────────────────────────────────────── */}
+      <section className="border-b border-border bg-surface/55" aria-label="System telemetry">
+        <dl className="mx-auto grid max-w-[1440px] grid-cols-2 lg:grid-cols-4">
+          {TELEMETRY.map((item, index) => (
+            <div
+              key={item.label}
+              className={`px-6 py-5 sm:px-8 ${index % 2 !== 0 ? 'border-l border-border' : ''} ${index > 1 ? 'border-t border-border lg:border-t-0' : ''} ${index > 0 ? 'lg:border-l lg:border-border' : ''}`}
+            >
+              <dd className="font-mono text-xl font-medium tabular-nums text-text-primary">{item.value}</dd>
+              <dt className="mt-1 text-xs font-medium text-text-secondary">{item.label}</dt>
+              <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-text-muted">{item.detail}</p>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="mx-auto grid max-w-[1440px] border-x border-border lg:grid-cols-[0.92fr_1.35fr_0.73fr]">
+        <div className="border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-light">Execution chain</p>
+          <h2 className="mt-3 max-w-sm text-3xl font-semibold leading-tight tracking-tight">
+            One incident. Four accountable stages.
+          </h2>
+          <p className="mt-4 max-w-[46ch] text-sm leading-6 text-text-secondary">
+            The interface exposes the handoff between physics, negotiation, validation, and resolution.
+            Each emitted object remains inspectable.
+          </p>
+        </div>
+
+        <ol className="divide-y divide-border">
+          {PIPELINE.map((step, index) => (
+            <li key={step.code} className="group grid grid-cols-[3.5rem_minmax(0,1fr)_auto] gap-4 px-6 py-5 transition-colors duration-200 hover:bg-surface-secondary/45 sm:px-8">
+              <div className="font-mono text-xs text-text-muted">
+                <span className="block text-accent-light">{step.code}</span>
+                <span className="mt-1 block text-[9px]">0{index + 1}</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <StatusMark tone={index === 2 ? 'warning' : 'success'} />
+                  <h3 className="text-sm font-semibold text-text-primary">{step.title}</h3>
+                </div>
+                <p className="mt-1.5 text-xs leading-5 text-text-secondary">{step.detail}</p>
+              </div>
+              <div className="text-right font-mono text-[9px] uppercase tracking-wider text-text-muted">
+                <span className="block text-text-secondary">{step.state}</span>
+                <span className="mt-2 hidden border-t border-border pt-2 xl:block">{step.output}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <aside className="border-t border-border bg-surface-muted/70 p-6 sm:p-8 lg:border-l lg:border-t-0">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-text-muted">Audit contract</p>
+          <div className="mt-6 space-y-6">
+            <div className="border-l-2 border-success pl-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-success-light">Verified source</p>
+              <p className="mt-2 text-sm font-medium">Safety numbers originate in deterministic Python.</p>
+            </div>
+            <div className="border-l-2 border-accent pl-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-accent-light">Narration boundary</p>
+              <p className="mt-2 text-sm font-medium">The LLM explains a computed decision; it does not make one.</p>
+            </div>
+            <div className="border-l-2 border-warning pl-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-warning-light">Fail-safe</p>
+              <p className="mt-2 text-sm font-medium">Unsafe or non-convergent plans escalate as valid outcomes.</p>
+            </div>
+          </div>
+          <Link
+            to="/negotiate"
+            className="mt-10 inline-flex items-center gap-3 border-t border-border-light pt-4 font-mono text-xs uppercase tracking-wider text-text-primary transition-colors hover:text-accent-light focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+          >
+            Inspect negotiation record <span aria-hidden="true">→</span>
+          </Link>
+        </aside>
+      </section>
+
       <footer className="border-t border-border">
-        <div className="mx-auto max-w-[1440px] px-8 py-6 text-center text-xs text-text-muted">
-          Aegis — built for demo purposes. Orbital data from{' '}
-          <span className="text-text-secondary">CelesTrak</span>. Propagation via{' '}
-          <span className="text-text-secondary">SGP4 (sgp4 Python library)</span>. All
-          safety-critical numbers (Δv, miss distance, yield_score) produced by deterministic Python —
-          never by the LLM.
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-6 py-5 font-mono text-[9px] uppercase tracking-wider text-text-muted sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <span>Aegis orbital safety demonstrator / CelesTrak + SGP4</span>
+          <span>Δv · miss distance · yield score — deterministic sources only</span>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }

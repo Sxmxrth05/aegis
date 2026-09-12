@@ -15,18 +15,28 @@ A living catalogue of components as they get built, so later screens stay visual
 ## Components
 
 ### Landing Page
-*(hero section, stat cards, CTA buttons)*
-Built in `frontend/src/pages/Landing.tsx` — three sections:
-- **Hero:** eyebrow label (uppercase tracking-widest `text-muted`), 56px/700 heading with an inline `text-accent` span + `textShadow` glow, 2-line sub-heading in `text-secondary`, two `Button` CTAs (`Link` + `Button` primary/secondary), a decorative `radial-gradient` overlay (pointer-events-none, purely visual, does not tint a card). Background glow uses an inline `style` radial-gradient on the section, not a colored `Card`.
-- **Stat cards:** 4-column responsive grid of `Card` components. Each card: `Badge` (status-color semantic), `font-mono text-3xl` stat value, label in `text-primary`, sub-label in `text-muted`. No colored card backgrounds — color comes through the Badge only.
-- **How it works:** 4-column grid of `Card` components. Each: `font-mono text-xs text-accent` step number, `text-base font-semibold` heading, `text-sm text-secondary` body copy.
-- **Demo CTA banner:** `rounded-xl border border-border` div with a `linear-gradient` inline style (not a colored Card — uses `bg-surface-secondary` as base, gradient is a subtle blue tint overlay). Two CTA buttons centred.
-- **Footer:** `border-t border-border` bar, `text-xs text-muted` attribution copy.
-- All CTAs: `Link` from `react-router-dom` wrapping `Button` — `/monitor` and `/negotiate`.
+*(operations briefing, live conjunction snapshot, telemetry rail, execution chain)*
+
+File: `frontend/src/pages/Landing.tsx`
+Last updated: 2026-09-12
+
+| Property | Class / pattern |
+|---|---|
+| Background | `ops-grid bg-background`; `bg-surface-muted/80` only for operational side panels |
+| Border | Square `border border-border` divisions; status accents use a narrow semantic border |
+| Border radius | None — ops surfaces are rectilinear |
+| Text — primary | Large condensed-feeling uppercase IBM Plex Sans, `tracking-[-0.055em]` |
+| Text — secondary | `text-text-secondary`; telemetry labels use `font-mono text-[8px–10px] uppercase tracking-wider` |
+| Spacing | Dense `px-6/8`, `py-3/5`; hero alone receives larger optical spacing |
+| Hover/focus | `transition duration-200`, semantic border/text shift, visible `focus-visible:outline-accent` |
+| Motion | One low-opacity `.scan-beam`; disabled by the global reduced-motion rule |
+| Accent usage | Blue for active controls/provenance, red for hazard, amber for gated/pending, green for verified |
+
+**Pattern notes:** The landing page is an operational briefing, not a marketing funnel. Do not restore centered gradient headlines, equal stat cards, numbered feature cards, pill badges, or a centered CTA banner. Metrics live in edge-to-edge telemetry rails; the seeded conjunction is presented as a live queue item.
 
 ### Shared Nav
 *(top navigation bar, used across all pages)*
-Built in `frontend/src/components/shared/NavBar.tsx` — 64px `bg-surface` bar with `border-b border-border`, logo/wordmark left, `NavLink`s center-right (active: `text-text-primary` + medium weight; inactive: `text-text-secondary` hover `text-text-primary`), live-status dot (`bg-success` with a soft glow) + "Live" label on the right. Currently a static placeholder — not yet wired to real WebSocket connection status.
+Built in `frontend/src/components/shared/NavBar.tsx` — 64px rectilinear `bg-surface` bar with `border-b border-border`; `AEGIS/OPS` monospace wordmark; uppercase 10px navigation; active route uses a thin accent underline; inactive links receive border/text hover and visible focus states. The far-right semantic status square reads the real Zustand WebSocket connection state.
 
 ### Globe Component
 *(configurable — live view / conjunction highlight / before-after trajectory modes)*
@@ -39,25 +49,37 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 - Globe texture (`earth-night.jpg`) is copied into `frontend/src/assets/` rather than imported from `three-globe`'s package directly — `three-globe`'s `exports` map blocks deep subpath imports in this version, and a local copy is also better for the offline demo path than the alternative unpkg CDN URL.
 - Mock data: `globe/mockTrackedObjects.ts` has 5 hand-written `TrackedObject`s, physically real (each one's `position_km`/`velocity_kmps` came from actually running `satellite.js`'s SGP4 propagation against a real TLE at a fixed timestamp, not fabricated numbers). `TODO(Dev A)` comment marks where to swap in the real Phase 0 fixture or live data once available.
 - **Vite config note:** `satellite.js` ships a WASM build using top-level await, which esbuild's default target can't pre-bundle. `vite.config.ts` now sets `build.target`/`optimizeDeps.esbuildOptions.target` to `'esnext'` to fix this — needed by any future code importing `satellite.js`, not just Globe.
-- Wired into `pages/Monitor.tsx` in `'live'` mode with a floating legend `Card` (object counts + accent/danger color key), verified via headless-Chromium screenshot.
+- Wired into `pages/Monitor.tsx` as the central watch-floor viewport, surrounded by squared translucent tracking, conjunction, and frame telemetry panels. The globe remains the primary surface; operational overlays use `bg-background/88–90` plus subtle `backdrop-blur-sm`.
 - **Hazard ring/marker recipe:** `ringColor` must be a function of the ring's progress `t` (`(t) => \`rgba(239, 68, 68, ${1 - t})\``), not a flat color string — otherwise every overlapping ring generation renders at full opacity instead of fading. Keep `ringRepeatPeriod` >= one ring's full lifetime (`ringMaxRadius / ringPropagationSpeed * 1000`, currently 3/2*1000=1500ms vs. a 1600ms repeat) so generations never overlap. Points render as `CylinderGeometry` pins — set `pointResolution={32}` (three-globe's default of 12 facets visibly at this scale). Skipping any of these three produces a jagged/scratchy hazard indicator instead of a clean pulsing ring.
 
+### Monitor Watch Floor
+
+File: `frontend/src/pages/Monitor.tsx`
+Last updated: 2026-09-12
+
+| Property | Class / pattern |
+|---|---|
+| Background | Full-viewport Globe + restrained navy directional overlay |
+| Panels | `border border-border bg-background/88–90 backdrop-blur-sm` |
+| Border radius | None |
+| Text | 8–10px uppercase mono labels; compact sans titles; tabular mono values |
+| Spacing | `px-4 py-3` rows, `p-4/6` outer shell |
+| Interactive | Solid danger action for active conjunction; 200ms hover, focus outline, pressed shift |
+| Status | Square glowing points; blue normal, red hazard, green live, amber reconnecting |
+
+**Pattern notes:** Keep the Globe visually dominant. Overlay only information needed to identify the tracked set, inspect the active conjunction, and enter the resolution flow. Do not use a rounded floating legend card.
+
 ### Conjunction Details
-*(side-by-side satellite stat cards, TCA/distance/probability panel)*
-Built in `frontend/src/pages/Negotiate.tsx`, replacing the placeholder route. All built from D3's `Card`/`Badge`/`Button` primitives, no new component files:
-- Reads `activeConjunctionAlert`/`trackedObjects` from `useNegotiationStore` — same store Monitor.tsx reads, not a separate fetch. Honest empty state (`Card` with explanatory text) when there's no active alert yet, rather than fabricating one.
-- **Two satellite stat cards** (`SatelliteCard`, a local component in the same file): `name`/`norad_id` direct from `TrackedObject`; `Altitude` and `Velocity` are real, computed client-side from `position_km`/`velocity_kmps` (vector magnitude, altitude = `|position_km| - 6371`) — not fabricated, not from the backend directly. `Operator`, `Fuel Δv margin`, `Mission priority`, `Maneuverability` are shown as `TBD` (muted, `font-mono`) with a one-line caption explaining why — these concepts exist in the backend (`OperatorProfile`'s `mvi`/`fuel_margin_pct`/`delta_v_mps`) but aren't part of any payload the frontend currently receives pre-negotiation, so labeling them TBD is the honest choice per this project's "never fabricate a number" ethos.
-- **Conjunction Assessment card**: `tca_utc`, `miss_distance_km`, `relative_velocity_kmps` direct from `ConjunctionAlert`; `Collision probability` shown as `TBD` — no such field exists in the schema.
-- Status `Badge` mapped from `ConjunctionStatus`: `alerted`/`escalated` → danger, `negotiating` → warning, `resolved`/`stood_down` → success.
-- **"Start Agent Negotiation" button**: on click, opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (see Data Layer section below for the `useAegisSocket` variant this needed) — every incoming envelope is `console.log`'d and counted; no transcript UI yet (that's the Negotiation Console, a separate task). Button disables and relabels once started.
+*(unified object/risk/control incident desk)*
+Built in `frontend/src/pages/Negotiate.tsx`. The primary object, secondary object, and risk geometry occupy one contiguous squared grid rather than separate rounded cards. Values are monospace/tabular; unavailable operator fields say `not transmitted`. A compact control rail opens the existing negotiation socket. Status uses bordered rectangular flags, never pills. The honest empty state links back to Monitor.
 
 ### Negotiation Console
-*(two-column live transcript, round-stage tracker)*
-Built in `frontend/src/components/negotiation/NegotiationConsole.tsx` — maps over `messages` from the store, rendering Operator A on the left, Operator B on the right, and Validation Agent centered. Uses existing `Card` and `Badge` primitives.
+*(structured decision ledger)*
+Built in `frontend/src/components/negotiation/NegotiationConsole.tsx` — semantic fixed-column table with event index, UTC, round, origin node, decision, deterministic yield score, and evidence/narration. Validation is a highlighted safety-gate row, not a centered chat bubble. The header exposes record/round/gate counts; the no-message state is an armed ledger rather than a hidden component.
 
 ### Negotiation Result
 *(agreed plan card, rationale block, mini trajectory preview)*
-Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — displays final agreed maneuver (delta-V, expected miss distance, residual risk) and rationale text. Handles the 'no safe maneuver found' state distinctly. Mini trajectory preview pending Phase 2 Globe enhancements.
+Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — squared semantic decision record with rationale on one side and a gapless numeric ledger on the other. Approved and no-safe-maneuver outcomes retain green/red status semantics without tinting the full component background. Links to the existing trajectory route.
 
 ### Trajectory Simulation
 *(globe in before/after mode, timeline scrubber)*
@@ -65,11 +87,11 @@ Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — displays f
 
 ### History Table
 *(filterable table of past conjunctions and outcomes)*
-← Agent fills this in when built
+Built in `frontend/src/pages/History.tsx` — archive briefing + derived record counters + fixed-column conjunction ledger. Uses square status flags, tabular figures, object-pair provenance, before→after miss distance, and explicit skeleton/error/empty states. Filter control is a squared, labelled operational input with hover and focus-visible states.
 
 ### About Page
 *(static content, tech stack summary, roadmap)*
-← Agent fills this in when built
+Built in `frontend/src/pages/About.tsx` — asymmetric system manifest with mission directive, four safety invariants, source/computation register, simulation-scope declaration, and phase roadmap. Uses the same border grid, telemetry typography, semantic status squares, and restrained scan motion as Landing.
 
 ---
 
@@ -77,7 +99,7 @@ Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — displays f
 
 ### Button
 `frontend/src/components/shared/Button.tsx` — thin wrapper over `<button>` (spreads all native `ButtonHTMLAttributes`, so `onClick`/`type`/`disabled` etc. pass through untouched). `variant?: 'primary' | 'secondary'`, default `'primary'`.
-- Base: `inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none`
+- Base: `inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:translate-y-px disabled:pointer-events-none disabled:opacity-50`
 - Primary: `bg-accent text-accent-foreground hover:bg-accent-dark`
 - Secondary/ghost: `border border-border bg-transparent text-text-secondary hover:border-border-light hover:text-text-primary`
 
@@ -122,8 +144,11 @@ Not a visual component, but logged here per the usual pattern since every screen
 
 Pre-populated starting points from `ui-tokens.md` / `ui-rules.md` — refine as you go:
 
-- **Page layout:** max-width ~1440px centered, 24-32px padding, globe-centric screens may go full-bleed
-- **Typography:** hero 40-56px/700, section heading 20-24px/600, body 14-15px/400, stat numbers 24-32px/700 (consider font-mono)
+- **Page layout:** `ops-grid`, max-width ~1440px, square border grids, compact 16–32px page padding; globe screens may go full-bleed beneath overlays
+- **Typography:** IBM Plex Sans for prose/headlines; IBM Plex Mono for navigation, labels, IDs, timestamps, statuses, and every number. Large display text is tight uppercase; operational labels are 8–10px with wide tracking.
+- **Operations surfaces:** prefer contiguous `border-border` grids and `bg-surface-muted/70–90` over collections of rounded Cards. No card shadows. No full semantic-color backgrounds except narrow action controls.
+- **Status flags:** rectangular borders + muted semantic tint; no pills. Status lights are 6–8px squares with restrained semantic glow.
+- **Interaction:** 200ms transitions, visible `focus-visible` outline, 1px pressed translation. Respect the global reduced-motion media query.
 - **Responsive:** design desktop-first for the demo (judges will view on a laptop/projector); a basic responsive pass is a nice-to-have, not a priority
 - **Status color legend (consistent everywhere):** accent/blue = active, danger/red = debris/hazard, warning/amber = selected/pending, success/green = resolved
 
