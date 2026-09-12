@@ -200,18 +200,18 @@ _No checkpoint session has occurred yet._
 
 ### Workstream A — Trajectory Data & History Persistence
 **Owner:** Dev A
-**Status:** All Workstream A tasks complete & verified (`[x]`)
+**Status:** All Workstream A tasks complete & verified (`[x]`) — `storage/db.py` reconciled
 **Depends on:** Dev B's `Resolution` schema (locked in Phase 0)
 **Next:** Checkpoint 2 full integration
 
 | Task | Status | Notes |
 |---|---|---|
 | Before/after propagation arrays for maneuver preview | `[x]` | Built in `backend/app/data/trajectory.py`. Uses J2-perturbed RK4 orbital equations of motion, impulsive delta-v burn mechanics (prograde, retrograde, radial, normal), synchronous scrubber timeline steps, and 3D globe polyline paths. Verified via `test_trajectory.py` (5/5 passing, energy drift < 1e-4, nominal 3.22 km -> maneuvered 12.74 km, threshold cleared). Static fixture generated at `backend/app/data/fixtures/trajectory_simulation.json`. Read-only API route `GET /api/trajectory/{conjunction_id}` added to `main.py`. |
-| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | Built in `backend/app/storage/db.py`. Implements `sqlite3` table schemas (`conjunctions`, `negotiation_messages`, `resolutions`), indexes, atomic transaction helpers (`save_negotiation_session`), and history query API (`get_history`, `get_full_session_details`). Verified via `test_db.py` (6/6 passing, foreign keys & atomic rollbacks verified). Default DB `aegis.db` seeded. REST API routes `GET /api/history` and `GET /api/history/{conjunction_id}` added to `main.py`. |
+| `storage/db.py` — SQLite persistence of resolved/escalated sessions | `[x]` | **Reconciled & Standardized by Dev A**: Merged independent parallel implementations (`Dev-A` and `user_c_integrated`) into one single production version in `backend/app/storage/db.py`. Preserved Dev A's WAL mode + `sqlite3.Row` factory connection pattern, composed `get_full_session_details()`, and Dev C's status filtering (`WHERE (c.status = ? OR r.status = ?)`). Function names standardized to `save_conjunction_alert`, `save_negotiation_session`, `get_history` with full backward-compatibility aliases (`save_conjunction`, `save_completed_session`, `get_history_sessions`). Test suite moved to `backend/app/storage/tests/test_db.py` (6/6 passing). Default DB `aegis.db` seeded. REST API routes `GET /api/history` and `GET /api/history/{conjunction_id}` added to `main.py`. |
 
 **Completion criteria:**
 - [x] Before/after arrays validated against a known maneuver scenario (`test_trajectory.py`)
-- [x] SQLite writes/reads verified via script (`test_db.py` & `main.py` REST API tests)
+- [x] SQLite writes/reads verified via script (`storage/tests/test_db.py` & `main.py` REST API tests)
 
 ---
 

@@ -1,11 +1,15 @@
 """
 db.py — Dev A (Phase 2 Workstream A)
 
-SQLite Persistence & History Storage Engine.
+SQLite Persistence & History Storage Engine (Reconciled & Standardized).
 Provides durable local persistence for conjunction alerts, negotiation transcripts,
 and resolutions, matching architecture.md's DB schema exactly.
 
-Provides query functions for Dev D's History table (/history) and REST endpoints.
+Features:
+- Connection handling: WAL mode + sqlite3.Row factory + contextmanager
+- Dual function aliases for full backwards compatibility across workstreams
+- Flexible history query filtering by both conjunction status and resolution status
+- Composed get_full_session_details() combining alert, messages transcript, and resolution
 
 Ownership: Dev A
 """
@@ -151,6 +155,10 @@ def save_conjunction_alert(
             ),
         )
         conn.commit()
+
+
+# Backwards-compatibility alias
+save_conjunction = save_conjunction_alert
 
 
 def update_conjunction_status(
@@ -352,6 +360,10 @@ def save_negotiation_session(
         conn.commit()
 
 
+# Backwards-compatibility alias
+save_completed_session = save_negotiation_session
+
+
 # ---------------------------------------------------------------------------
 # Read & Query Operations (History Table API)
 # ---------------------------------------------------------------------------
@@ -406,7 +418,8 @@ def get_history(
     """
     Primary query for Dev D's History page (/history).
     Returns a joined list of past conjunctions with their resolution details
-    and message counts. Supports filtering by status ('resolved', 'escalated', etc.).
+    and message counts. Supports filtering by status (matches conjunction status
+    OR resolution status).
     """
     with get_db_connection(db_path) as conn:
         query = """
@@ -432,14 +445,18 @@ def get_history(
         """
         params: list[Any] = []
         if status_filter:
-            query += " WHERE c.status = ?"
-            params.append(status_filter)
+            query += " WHERE (c.status = ? OR r.status = ?)"
+            params.extend([status_filter, status_filter])
 
         query += " ORDER BY c.created_at DESC LIMIT ? OFFSET ?;"
         params.extend([limit, offset])
 
         rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+
+# Backwards-compatibility alias
+get_history_sessions = get_history
 
 
 def get_full_session_details(
@@ -449,6 +466,7 @@ def get_full_session_details(
     """
     Returns the complete session record (conjunction alert, negotiation messages
     transcript, and resolution) for detailed modal / history drill-down views.
+    Composes get_conjunction(), get_negotiation_messages(), and get_resolution().
     """
     alert = get_conjunction(conjunction_id, db_path)
     if not alert:
