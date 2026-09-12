@@ -16,7 +16,13 @@ A living catalogue of components as they get built, so later screens stay visual
 
 ### Landing Page
 *(hero section, stat cards, CTA buttons)*
-← Agent fills this in when built
+Built in `frontend/src/pages/Landing.tsx` — three sections:
+- **Hero:** eyebrow label (uppercase tracking-widest `text-muted`), 56px/700 heading with an inline `text-accent` span + `textShadow` glow, 2-line sub-heading in `text-secondary`, two `Button` CTAs (`Link` + `Button` primary/secondary), a decorative `radial-gradient` overlay (pointer-events-none, purely visual, does not tint a card). Background glow uses an inline `style` radial-gradient on the section, not a colored `Card`.
+- **Stat cards:** 4-column responsive grid of `Card` components. Each card: `Badge` (status-color semantic), `font-mono text-3xl` stat value, label in `text-primary`, sub-label in `text-muted`. No colored card backgrounds — color comes through the Badge only.
+- **How it works:** 4-column grid of `Card` components. Each: `font-mono text-xs text-accent` step number, `text-base font-semibold` heading, `text-sm text-secondary` body copy.
+- **Demo CTA banner:** `rounded-xl border border-border` div with a `linear-gradient` inline style (not a colored Card — uses `bg-surface-secondary` as base, gradient is a subtle blue tint overlay). Two CTA buttons centred.
+- **Footer:** `border-t border-border` bar, `text-xs text-muted` attribution copy.
+- All CTAs: `Link` from `react-router-dom` wrapping `Button` — `/monitor` and `/negotiate`.
 
 ### Shared Nav
 *(top navigation bar, used across all pages)*
