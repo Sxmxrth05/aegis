@@ -96,14 +96,31 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, className = '' }
         pointAltitude="alt"
         pointColor={(p) => ((p as GlobePoint).isFlagged ? DANGER_COLOR : ACCENT_COLOR)}
         pointRadius={(p) => ((p as GlobePoint).isFlagged ? 0.6 : 0.35)}
+        // Each point renders as a cylinder extruded to the satellite's real
+        // altitude; three-globe's default pointResolution (12-sided cross
+        // section) is visibly faceted at this scale, especially near the
+        // globe's limb where perspective stretches it further — reads as a
+        // jagged streak rather than a clean pin. A higher resolution fixes
+        // the geometry itself, independent of the ring-fade fix above.
+        pointResolution={32}
         pointLabel={(p) => `${(p as GlobePoint).name} (${(p as GlobePoint).norad_id})`}
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
-        ringColor={() => DANGER_COLOR}
-        ringMaxRadius={4}
+        // Each ring's color is itself a function of its animation progress
+        // (t: 0 -> 1) — fading opacity as it expands is what makes a single
+        // pulse read as clean, rather than a solid outline. ringMaxRadius /
+        // ringPropagationSpeed gives one ring's full lifetime (here 1.5s);
+        // ringRepeatPeriod is set slightly longer than that so each pulse
+        // fully fades out before the next one starts — no overlapping
+        // generations, which is what was producing the scratchy look near
+        // the globe's limb (multiple solid-opacity rings stacked at
+        // different radii, each already stretched by perspective).
+        ringColor={() => (t: number) => `rgba(239, 68, 68, ${1 - t})`}
+        ringResolution={128}
+        ringMaxRadius={3}
         ringPropagationSpeed={2}
-        ringRepeatPeriod={800}
+        ringRepeatPeriod={1600}
       />
     </div>
   );

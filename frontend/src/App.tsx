@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { NavBar } from './components/shared/NavBar';
+import { useAegisSocket } from './lib/websocket';
 import Landing from './pages/Landing';
 import Monitor from './pages/Monitor';
 import Negotiate from './pages/Negotiate';
@@ -8,6 +9,11 @@ import History from './pages/History';
 import About from './pages/About';
 
 export default function App() {
+  // Mounted once here (not per-page) so the connection and its status
+  // persist across route changes — the NavBar's live indicator needs it
+  // regardless of which page is showing.
+  useAegisSocket();
+
   return (
     <div className="min-h-screen bg-background">
       <NavBar />

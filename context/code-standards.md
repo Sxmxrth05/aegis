@@ -96,6 +96,17 @@ Aegis is built by four developers working in parallel on separate directory boun
 
 ---
 
+## Local Dev Environment Notes
+
+- **Windows + Git-Bash process PIDs:** a backend/frontend process started via `nohup <cmd> &` under Git-Bash can be reported with a stale or wrong PID by `netstat`/`Get-NetTCPConnection` — `taskkill`/`Stop-Process` against that PID fails (often silently) while the real process keeps running and the port stays live. If a kill/restart doesn't seem to take effect, find the actual owning process by command line instead of trusting the network-stack PID:
+  ```powershell
+  Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*uvicorn*" } |
+    Select-Object ProcessId, Name, CommandLine
+  ```
+  Then `Stop-Process -Id <real PID> -Force` (or `taskkill /F /PID <real PID>` from `cmd.exe`, not Git-Bash's `taskkill //F //PID` form, which hits the same stale-PID problem).
+
+---
+
 ## Environment Variables
 
 | Variable | Used in |
