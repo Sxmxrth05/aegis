@@ -10,12 +10,12 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 |---|---|
 | Project | Aegis |
 | Team size | 4 developers |
-| Current phase | **Phase 0 — Shared Foundation & Contracts** |
-| Current checkpoint target | Checkpoint 1 — Live Conjunction Pipeline (not yet reached) |
-| Overall status | 🟡 In progress — repo skeleton, schemas, WebSocket envelope, shared constants, and the Resolution fixture are on `main`; still waiting on Dev A's `TrackedObject`/`ConjunctionAlert` fixture and Dev C's `NegotiationMessage` transcript fixture (exists on `dev-c`, not yet merged) before Phase 0 fully closes |
-| Last completed milestone | `foundation/contracts` merged to `main` (commit `3818c17`, reviewed/approved by Dev C): Pydantic schemas, WebSocket envelope contract, shared constants, Resolution mock fixture |
-| Current team objective | Get Dev A's and Dev C's remaining Phase 0 mock fixtures merged to `main` to close out Phase 0 |
-| Next team milestone | Phase 0 exit → developers branch into Workstreams A–D |
+| Current phase | **Phase 1 complete; Phase 2 underway.** **Correction:** this field said "Phase 0" until now — stale since Phase 0's own exit checklist (§3) has been fully checked for some time, all of Workstream A/B/C's Phase 1 tasks are merged, Workstream D is 5/6 merged, and Phase 2 negotiation-engine work (`negotiator.py`) has already landed on `main`. |
+| Current checkpoint target | Checkpoint 1 — all individual pieces (A/B/C fully, D mostly) are merged and pass their own standalone verification, but no joint team checkpoint session has occurred (§5 is still unfilled) — per the status legend, that means Checkpoint 1 is not yet `[V]`-level passed even though the underlying work is done |
+| Overall status | 🟢 Phase 0 and Phase 1 substantially complete; Phase 2 (negotiation state machine, live validation) already has real, tested code on `main` (`agents/negotiator.py`) ahead of a formal Checkpoint 1 session |
+| Last completed milestone | `dev-b/validation-agent-fixes` merged to `main` (commit `88c0db7`): fixed a real `TypedDict`/canonical-`TrackedObject` conflict in `validation_agent.py` found during a pre-Checkpoint-1 audit |
+| Current team objective | Hold an actual joint Checkpoint 1 session (§5) to formally verify what's already built, then start Checkpoint 2 work (full negotiation loop) in earnest |
+| Next team milestone | Checkpoint 1 team verification session |
 
 ---
 
@@ -87,23 +87,23 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 
 ### Workstream B — Orchestrator, Schemas & Realtime Backbone
 **Owner:** Dev B
-**Current task:** —
-**Status:** Not started
-**Blocked by:** Phase 0 exit (own schemas/contracts)
-**Waiting on:** Dev A's `detect_conjunctions()` (can stub with hardcoded alert to unblock early)
-**Next:** B1
-**Merge status:** Nothing merged
+**Current task:** — (all three Phase 1 tasks complete)
+**Status:** B1, B2, B3 all complete and merged
+**Blocked by:** Nothing
+**Waiting on:** Nothing
+**Next:** Phase 2 — Negotiation State Machine (below)
+**Merge status:** B1, B3 merged directly; B2's actual deliverable (`websocket_manager.py`) was built and merged during Phase 0 (see Phase 0 table's "WebSocket envelope contract" row) — this row was simply never updated to reflect that until now.
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
 | B1 | `main.py` — FastAPI skeleton, health-check route, WS route stub (echo) | `[M]` | `/health` and `/ws/echo` scaffolded and pushed to `main` |
-| B2 | `orchestrator/websocket_manager.py` — connection mgmt, sequence numbers, snapshot-on-reconnect | `[ ]` | Enforces invariant 6 |
-| B3 | `orchestrator/orchestrator.py` (Monitor slice) — wraps Dev A's output as `ConjunctionAlert` events, broadcasts | `[M]` | Merged to `main` via `dev-b/monitor-broadcast` (commit `74cd70c`, rebased onto Dev A's PR #1). `Orchestrator.detect_conjunctions()` currently returns a single hardcoded, schema-valid `ConjunctionAlert` fixture (pending Dev A's real `detect_conjunctions()` from A3 — swap point marked with a `TODO(Dev A)` comment at that exact line). Wired to a new `/ws/monitor` route in `main.py`: connect → snapshot (empty `conjunctions` list) → broadcast the alert. Verified manually with a Python `websockets` client: snapshot arrives first at `sequence: 1`, alert follows at `sequence: 2` with the correct envelope shape. |
+| B2 | `orchestrator/websocket_manager.py` — connection mgmt, sequence numbers, snapshot-on-reconnect | `[M]` | **Correction:** was showing `[ ]` despite already being done — the actual file was built and merged as part of Phase 0's "WebSocket envelope contract" deliverable (§3's table), which this row never cross-referenced. `ConnectionManager` implements per-session monotonic sequencing and always sends a `snapshot` first on connect (invariant 6); live-verified repeatedly in later D5/D6 end-to-end work (real kill/restart reconnect cycles). |
+| B3 | `orchestrator/orchestrator.py` (Monitor slice) — wraps Dev A's output as `ConjunctionAlert` events, broadcasts | `[M]` | Merged to `main` via `dev-b/monitor-broadcast` (commit `74cd70c`, rebased onto Dev A's PR #1). Originally ran on a hardcoded fixture pending Dev A's A3; since A3 landed, `Orchestrator.detect_conjunctions()` calls the real `monitor_agent.detect_conjunctions()` (confirmed live in the pre-Checkpoint-1 audit — real alert values, not the old fixture's). Wired to `/ws/monitor` in `main.py`: connect → snapshot → broadcast. Verified manually with a Python `websockets` client: snapshot arrives first at `sequence: 1`, alert follows at `sequence: 2` with the correct envelope shape. |
 
 #### Completion Criteria
-- [ ] WS client (e.g. `wscat`) confirms sequence numbers increment
-- [ ] Snapshot arrives first on new connection
-- [ ] Real (non-mocked) `ConjunctionAlert` from Dev A flows through the socket to a connected client
+- [x] WS client (Python `websockets`, and later a full frontend E2E run) confirms sequence numbers increment
+- [x] Snapshot arrives first on new connection
+- [x] Real (non-mocked) `ConjunctionAlert` from Dev A flows through the socket to a connected client — confirmed live during the pre-Checkpoint-1 audit
 
 ---
 
@@ -132,13 +132,13 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 ---
 
 ### Workstream D — Frontend Experience & WebSocket Client
-**Owner:** Dev D
-**Current task:** —
-**Status:** Not started
-**Blocked by:** Phase 0 exit (mock fixtures, WS envelope contract)
-**Waiting on:** Dev A's mock fixture, Dev B's WS contract (frontend can mock B's server locally until it exists)
-**Next:** D1
-**Merge status:** Nothing merged
+**Owner:** Dev D (D1, D3–D6 covered by Dev B while Dev D was tied up — see each row's notes)
+**Current task:** D2 (Landing page) — the only task in this workstream not yet started
+**Status:** 5 of 6 tasks complete and merged (D1, D3, D4, D5, D6); D2 outstanding
+**Blocked by:** Nothing
+**Waiting on:** Nothing
+**Next:** D2
+**Merge status:** D1 (`main`), D3 (`dev-d/shared-primitives`), D4 (`dev-d/globe-component` + follow-up fixes on `dev-d/globe-fixes`), D5 and D6 (`dev-d/globe-fixes`) all merged to `main`. D2 not started.
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
@@ -150,9 +150,9 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 | D6 | `store/useNegotiationStore.ts` skeleton wired to D5 | `[M]` | Dev B (covering Dev D). Merged to `main` via `dev-d/globe-fixes` (commit `7e9508b`). Single Zustand store (per code-standards.md — one store, not split) holding `trackedObjects`, `activeConjunctionAlert`, `connectionStatus: 'connecting' \| 'connected' \| 'reconnecting' \| 'disconnected'`. One `updateFromSocket(envelope)` action funnels every WS event type: `snapshot` replaces `trackedObjects`/`activeConjunctionAlert` wholesale (backend's snapshot payload doesn't carry tracked-object state yet, only `conjunctions` — noted in a comment so this isn't mistaken for a bug later), `conjunction_alert` sets `activeConjunctionAlert`, `negotiation_message`/`resolution` are accepted but no-op pending Phase 2, `error` logs. Also exports the `EventType`/`WebSocketEnvelope` types mirroring `schemas/websocket.py`. Wired into `NavBar.tsx` (live status pill, 4-state color/label map) and `Monitor.tsx` (live `trackedObjects` with automatic fallback to D4's `mockTrackedObjects.ts` when the live array is empty — true today, self-corrects once the backend snapshot grows to include tracked objects). |
 
 #### Completion Criteria
-- [ ] Globe renders mock satellite list correctly with legend/colors matching `ui-tokens.md`
-- [ ] App shell, nav, landing, and mock-fed Globe visually match reference mockup's polish
-- [ ] `lib/websocket.ts` successfully round-trips against B1's echo stub
+- [x] Globe renders mock satellite list correctly with legend/colors matching `ui-tokens.md` — verified via headless-Chromium screenshots (D4)
+- [ ] App shell, nav, landing, and mock-fed Globe visually match reference mockup's polish — app shell/nav/Globe done and verified; Landing page (D2) itself hasn't been built yet, so this criterion can't be fully closed until D2 lands
+- [x] `lib/websocket.ts` round-trips successfully — verified against Dev B's real, live `/ws/monitor` route (B3), a stronger check than the original "B1's echo stub" target; includes a real kill/restart reconnect cycle (D5)
 
 ---
 
@@ -234,17 +234,17 @@ _No checkpoint session has occurred yet._
 
 ### Workstream C — Live Narration & Validation
 **Owner:** Dev C
-**Status:** Complete / Independently Verified
+**Status:** Individually complete and passing (pytest + standalone scripts) — **not** `[V]` per the status legend, since that requires a team checkpoint session and none has happened yet. **Correction:** this row previously said "Complete / Independently Verified," which reads as the `[V]` level; downgraded the wording to avoid implying checkpoint-level sign-off that hasn't occurred.
 **Depends on:** Dev B's orchestrator hooks, Dev A's real `propagate()`
-**Next:** Connect with Dev B's orchestrator when ready
+**Next:** Connect with Dev B's orchestrator when ready; separately, `negotiator.py`'s round cap needs a real look (see note below) before this can honestly be called checkpoint-ready
 
 | Task | Status | Notes |
 |---|---|---|
-| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback |
+| Wire `operator_agent.py` into live orchestrator rounds (replace fixture harness) | `[x]` | Implemented in `agents/negotiator.py` via `NegotiationEngine` multi-round proposals and template fallback. **Gap found during independent verification of a status report about this workstream:** `MAX_NEGOTIATION_ROUNDS` is imported in `negotiator.py` but never actually referenced in any conditional or loop bound — only in a docstring comment. The real round structure is hardcoded to exactly 2 attempts (initial proposal, then one counter-proposal if rejected) regardless of the constant's value (currently 3); it doesn't scale with the constant and isn't capped by it. Not a crash risk today since the hardcoded structure happens to terminate, but the constant is decorative here, not enforced. |
 | Wire `validation_agent.py` to Dev A's real `propagate()` (replace stub) | `[x]` | Wired with SGP4 and in-memory Satrec caching in `agents/validation_agent.py` |
 
 **Completion criteria:**
-- [x] At least one live run where validation rejects a maneuver and forces re-negotiation (verified in `run_negotiation_simulation.py` and `test_negotiator.py`)
+- [x] At least one live run where validation rejects a maneuver and forces re-negotiation — re-confirmed independently: `test_invariant_9_no_safe_maneuver` mocks `run_validation_check` to force `reject_secondary_risk` and asserts the engine reaches `ResolutionStatus.NO_SAFE_MANEUVER_FOUND`; this is a real exercised code path, not just a declared enum value.
 
 ---
 
