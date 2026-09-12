@@ -52,6 +52,33 @@ Built in `frontend/src/components/shared/NavBar.tsx` — 64px `bg-surface` bar w
 
 ---
 
+## Shared Primitives
+
+### Button
+`frontend/src/components/shared/Button.tsx` — thin wrapper over `<button>` (spreads all native `ButtonHTMLAttributes`, so `onClick`/`type`/`disabled` etc. pass through untouched). `variant?: 'primary' | 'secondary'`, default `'primary'`.
+- Base: `inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none`
+- Primary: `bg-accent text-accent-foreground hover:bg-accent-dark`
+- Secondary/ghost: `border border-border bg-transparent text-text-secondary hover:border-border-light hover:text-text-primary`
+
+### Card
+`frontend/src/components/shared/Card.tsx` — thin wrapper over `<div>` (spreads native `HTMLAttributes<HTMLDivElement>`).
+- Recipe: `bg-surface border border-border rounded-lg p-6`
+- No colored backgrounds by design — introduce color via a `Badge`/status dot/small accent bar placed inside, never by tinting the card itself (the one hard visual rule in `ui-rules.md`).
+
+### Badge
+`frontend/src/components/shared/Badge.tsx` — thin wrapper over `<span>`. Required `status: 'active' | 'danger' | 'warning' | 'success'`.
+- Base: `inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`
+- `active` → `bg-accent-muted text-accent-light`
+- `danger` → `bg-danger-muted text-danger-light`
+- `warning` → `bg-warning-muted text-warning-light`
+- `success` → `bg-success-muted text-success-light`
+
+All three accept `className` for one-off overrides and are otherwise deliberately unstyled beyond the above — build screen-specific layout (flex/grid, gaps, spacing) at the call site, not inside the primitive.
+
+**Verified against the dark theme:** screenshotted at `/monitor` (Vite dev server + headless Chromium) — primary/secondary buttons, a card, and all four badge statuses render with correct token colors and no console errors.
+
+---
+
 ## Patterns & Conventions
 
 Pre-populated starting points from `ui-tokens.md` / `ui-rules.md` — refine as you go:
