@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { animate, stagger } from 'animejs';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
@@ -81,6 +82,25 @@ export default function Negotiate() {
   const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
   const [negotiationStarted, setNegotiationStarted] = useState(false);
 
+  /* ── page entry stagger ── */
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = pageRef.current;
+    if (!el) return;
+    const sections = Array.from(el.children) as HTMLElement[];
+    animate(sections, {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      duration: 360,
+      delay: stagger(70),
+      easing: 'easeOutCubic',
+    });
+  }, [activeConjunctionAlert?.id]); // re-run when alert changes
+
+  /* ── button pulse ref ── */
+  const execBtnRef = useRef<HTMLButtonElement>(null);
+
   const negotiationUrl = activeConjunctionAlert
     ? buildNegotiationWsUrl(activeConjunctionAlert.id)
     : undefined;
@@ -128,7 +148,7 @@ export default function Negotiate() {
 
   return (
     <main className="ops-grid min-h-[calc(100vh-4rem)] bg-background px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1440px]">
+      <div ref={pageRef} className="mx-auto max-w-[1440px]">
         <header className="grid gap-5 border-b border-border pb-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
             <div className="flex flex-wrap items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
@@ -194,12 +214,22 @@ export default function Negotiate() {
             </p>
           </div>
           <button
+            ref={execBtnRef}
             type="button"
             disabled={negotiationStarted}
-            onClick={() => setNegotiationStarted(true)}
-            className="h-full min-h-14 bg-accent px-6 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition duration-200 hover:bg-accent-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:translate-y-px disabled:cursor-not-allowed disabled:bg-surface-tertiary disabled:text-text-muted"
+            onClick={() => {
+              setNegotiationStarted(true);
+              if (execBtnRef.current && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                animate(execBtnRef.current, {
+                  scale: [1, 0.96, 1.04, 1],
+                  duration: 400,
+                  easing: 'easeInOutQuad',
+                });
+              }
+            }}
+            className="h-full min-h-14 bg-accent px-6 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition duration-200 hover:bg-accent-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:bg-surface-tertiary disabled:text-text-muted"
           >
-            {negotiationStarted ? 'Session in progress' : 'Execute negotiation →'}
+            {negotiationStarted ? 'Session in progress' : 'Execute negotiation'}
           </button>
         </section>
 

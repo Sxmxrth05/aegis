@@ -1,4 +1,6 @@
-﻿import { Link } from 'react-router-dom';
+import { animate, stagger } from 'animejs';
+import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Globe } from '../components/globe/Globe';
 import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
 import { useNegotiationStore } from '../store/useNegotiationStore';
@@ -39,6 +41,102 @@ export default function Landing() {
   const liveTrackedObjects = useNegotiationStore((state) => state.trackedObjects);
   const activeConjunctionAlert = useNegotiationStore((state) => state.activeConjunctionAlert);
   const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
+
+  /* ── animation refs ── */
+  const heroStatusRef  = useRef<HTMLDivElement>(null);
+  const heroHeadRef    = useRef<HTMLHeadingElement>(null);
+  const heroBodyRef    = useRef<HTMLParagraphElement>(null);
+  const heroCTARef     = useRef<HTMLDivElement>(null);
+  const cardsRef       = useRef<HTMLElement>(null);
+  const pipelineRef    = useRef<HTMLOListElement>(null);
+
+  /* ── hero entry sequence (once on mount) ── */
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const tl = [
+      { el: heroStatusRef.current,  delay: 0   },
+      { el: heroHeadRef.current,    delay: 90  },
+      { el: heroBodyRef.current,    delay: 320 },
+      { el: heroCTARef.current,     delay: 420 },
+    ];
+
+    // headline words get individual stagger
+    const headlineWords = heroHeadRef.current
+      ? Array.from(heroHeadRef.current.children)
+      : [];
+
+    tl.forEach(({ el, delay }) => {
+      if (!el) return;
+      animate(el, {
+        opacity: [0, 1],
+        translateY: [14, 0],
+        duration: 480,
+        delay,
+        easing: 'easeOutCubic',
+      });
+    });
+
+    if (headlineWords.length > 0) {
+      animate(headlineWords, {
+        opacity: [0, 1],
+        translateY: [18, 0],
+        duration: 440,
+        delay: stagger(80, { start: 110 }),
+        easing: 'easeOutCubic',
+      });
+    }
+  }, []);
+
+  /* ── scroll-triggered stagger for bottom cards ── */
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = cardsRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        const cards = Array.from(el.children) as HTMLElement[];
+        animate(cards, {
+          opacity: [0, 1],
+          translateY: [16, 0],
+          duration: 360,
+          delay: stagger(65),
+          easing: 'easeOutCubic',
+        });
+      },
+      { threshold: 0.12 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  /* ── scroll-triggered stagger for pipeline steps ── */
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = pipelineRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        const steps = Array.from(el.children) as HTMLElement[];
+        animate(steps, {
+          opacity: [0, 1],
+          translateX: [-10, 0],
+          duration: 320,
+          delay: stagger(70),
+          easing: 'easeOutCubic',
+        });
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <main className="ops-grid min-h-screen bg-background text-text-primary overflow-x-hidden">
@@ -81,7 +179,11 @@ export default function Landing() {
           style={{ maxWidth: '50%', minHeight: 'inherit' }}
         >
           {/* status row */}
-          <div className="mb-8 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
+          <div
+            ref={heroStatusRef}
+            className="mb-8 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted"
+            style={{ opacity: 0 }}
+          >
             <span className="flex items-center gap-2 border border-success/25 bg-success-muted/40 px-2.5 py-1 text-success-light">
               <StatusDot tone="success" /> System Status&nbsp;&middot;&nbsp;Nominal
             </span>
@@ -89,30 +191,35 @@ export default function Landing() {
             <span>UTC synchronized</span>
           </div>
 
-          {/* headline */}
+          {/* headline — each span is a stagger target */}
           <h1
+            ref={heroHeadRef}
             className="font-sans font-bold uppercase leading-[0.88] tracking-[-0.04em]"
             style={{ fontSize: 'clamp(3.2rem,8vw,7.4rem)' }}
           >
-            <span className="block text-text-primary">Detect.</span>
-            <span className="block text-text-primary">Negotiate.</span>
+            <span className="block text-text-primary" style={{ opacity: 0 }}>Detect.</span>
+            <span className="block text-text-primary" style={{ opacity: 0 }}>Negotiate.</span>
             <span
               className="block text-accent-light"
-              style={{ textShadow: '0 0 48px rgba(96,165,250,0.35)' }}
+              style={{ opacity: 0, textShadow: '0 0 48px rgba(96,165,250,0.35)' }}
             >
               Resolve.
             </span>
           </h1>
 
           {/* body */}
-          <p className="mt-8 max-w-[52ch] text-sm leading-[1.75] text-text-secondary sm:text-base">
+          <p
+            ref={heroBodyRef}
+            className="mt-8 max-w-[52ch] text-sm leading-[1.75] text-text-secondary sm:text-base"
+            style={{ opacity: 0 }}
+          >
             Aegis screens every close approach in low Earth orbit, assigns maneuver
             responsibility through deterministic cost functions, and validates the
             resulting trajectory before a plan is released.
           </p>
 
           {/* CTAs */}
-          <div className="mt-9 flex flex-wrap items-center gap-4">
+          <div ref={heroCTARef} className="mt-9 flex flex-wrap items-center gap-4" style={{ opacity: 0 }}>
             <button
               aria-label="Play demo"
               className="flex h-11 w-11 items-center justify-center rounded-full border border-border-light bg-surface-secondary text-text-secondary transition hover:border-accent hover:text-accent-light"
@@ -145,6 +252,7 @@ export default function Landing() {
 
       {/* ── BOTTOM CARDS ──────────────────────────────── */}
       <section
+        ref={cardsRef}
         className="mx-auto w-full max-w-[1440px] grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 border-x border-b border-border"
         aria-label="Mission overview"
       >
@@ -152,6 +260,7 @@ export default function Landing() {
           <div
             key={card.id}
             className={`group relative flex flex-col gap-3 p-5 sm:p-6 transition-colors duration-200 hover:bg-surface-secondary/30 ${i > 0 ? 'border-l border-border' : ''}`}
+            style={{ opacity: 0 }}
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -186,14 +295,14 @@ export default function Landing() {
           </p>
         </div>
 
-        <ol className="divide-y divide-border">
+        <ol ref={pipelineRef}>
           {([
             { code: 'MON', state: 'ACTIVE', tone: 'success' as Tone, title: 'Conjunction monitor',  detail: 'CelesTrak TLE -> SGP4 propagation -> pairwise screen', output: 'ConjunctionAlert'    },
             { code: 'NEG', state: 'ARMED',  tone: 'success' as Tone, title: 'Operator negotiation', detail: 'Mission value + fuel margin + maneuver cost',            output: 'NegotiationMessage' },
             { code: 'VAL', state: 'GATED',  tone: 'warning' as Tone, title: 'Safety validation',    detail: 'Six-hour propagation against the tracked set',            output: 'approve / reject'   },
             { code: 'RES', state: 'READY',  tone: 'success' as Tone, title: 'Resolution record',    detail: 'Maneuver, delta-v, execution UTC, residual risk',          output: 'Resolution'         },
           ]).map((step, index) => (
-            <li key={step.code} className="group grid grid-cols-[3.5rem_minmax(0,1fr)_auto] gap-4 px-6 py-5 transition-colors duration-200 hover:bg-surface-secondary/45 sm:px-8">
+            <li key={step.code} className="group grid grid-cols-[3.5rem_minmax(0,1fr)_auto] gap-4 px-6 py-5 transition-colors duration-200 hover:bg-surface-secondary/45 sm:px-8 divide-y divide-border [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border" style={{ opacity: 0 }}>
               <div className="font-mono text-xs text-text-muted">
                 <span className="block text-accent-light">{step.code}</span>
                 <span className="mt-1 block text-[9px]">0{index + 1}</span>
