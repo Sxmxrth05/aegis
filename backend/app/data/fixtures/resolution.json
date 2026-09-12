@@ -1,0 +1,12 @@
+{
+  "id": "b6e4a1d2-9c3f-4e7a-8b2d-5f1a0c9e7d3b",
+  "conjunction_id": "3f2a9c1e-7b4d-4a6f-9e0c-1d8b5a3f2e6c",
+  "maneuvering_agent": "operator_A",
+  "maneuver_type": "prograde_burn",
+  "delta_v_mps": 0.42,
+  "execution_time_utc": "2026-01-14T08:32:00Z",
+  "expected_min_distance_km": 12.7,
+  "residual_risk": 0.0031,
+  "rationale_text": "Operator A yielded after two rounds (yield_score 0.71 vs 0.54) — lower remaining fuel margin made a small prograde burn cheaper than Operator B's proposed retrograde maneuver. Validation agent re-propagated 6h ahead and found no secondary conjunction introduced by the new trajectory.",
+  "status": "approved"
+}
