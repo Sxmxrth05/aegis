@@ -20,7 +20,7 @@ A living catalogue of components as they get built, so later screens stay visual
 
 ### Shared Nav
 *(top navigation bar, used across all pages)*
-← Agent fills this in when built
+Built in `frontend/src/components/shared/NavBar.tsx` — 64px `bg-surface` bar with `border-b border-border`, logo/wordmark left, `NavLink`s center-right (active: `text-text-primary` + medium weight; inactive: `text-text-secondary` hover `text-text-primary`), live-status dot (`bg-success` with a soft glow) + "Live" label on the right. Currently a static placeholder — not yet wired to real WebSocket connection status.
 
 ### Globe Component
 *(configurable — live view / conjunction highlight / before-after trajectory modes)*

@@ -12,9 +12,9 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 | Team size | 4 developers |
 | Current phase | **Phase 0 — Shared Foundation & Contracts** |
 | Current checkpoint target | Checkpoint 1 — Live Conjunction Pipeline (not yet reached) |
-| Overall status | 🔴 Not started — no implementation work has begun |
-| Last completed milestone | None |
-| Current team objective | Agree and commit schemas, WebSocket envelope, shared constants, mock fixtures, and repo skeleton (Phase 0) |
+| Overall status | 🟡 In progress — repo skeleton (backend + frontend) scaffolded and pushed; schemas/WS envelope/constants/fixtures still outstanding |
+| Last completed milestone | Repo skeleton (backend `/backend/app/`, frontend `/frontend/src/`) committed to `main` |
+| Current team objective | Lock Pydantic schemas, WebSocket envelope contract, shared constants, and mock fixtures to finish Phase 0 |
 | Next team milestone | Phase 0 exit → developers branch into Workstreams A–D |
 
 ---
@@ -38,8 +38,8 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 
 | Artifact | Owner | Status | Notes |
 |---|---|---|---|
-| Repo skeleton (backend half) | Dev B | `[ ]` | `/backend/app/{agents,data,schemas,orchestrator,storage}` |
-| Repo skeleton (frontend half) | Dev D | `[ ]` | `/frontend/src/{components,pages,store,lib}` |
+| Repo skeleton (backend half) | Dev B | `[M]` | `/backend/app/{agents,data,schemas,orchestrator,storage}` scaffolded — FastAPI app + health route + `/ws/echo` stub in `main.py`. Package dirs are empty `__init__.py` placeholders; real logic not yet written. |
+| Repo skeleton (frontend half) | Dev D | `[M]` | `/frontend/src/{components,pages,store,lib}` scaffolded — Vite + React + TS + Tailwind v4 wired to `ui-tokens.md`'s tokens, top nav (`components/shared/NavBar.tsx`) with placeholder routes for all 6 pages. `store/` and `lib/` still empty — D5/D6 not started. |
 | Pydantic schemas (`TrackedObject`, `ConjunctionAlert`, `NegotiationMessage`, `Resolution`) | Dev B | `[ ]` | Must match `architecture.md` DB schema field names/types |
 | WebSocket envelope contract (`{type, sequence, payload}` + event types) | Dev B | `[ ]` | Includes reconnect-always-requests-snapshot rule (invariant 6) |
 | Shared constants (`CONJUNCTION_THRESHOLD_KM`, `HYSTERESIS_CLEAR_KM`, `MAX_NEGOTIATION_ROUNDS`, `VALIDATION_LOOKAHEAD_HOURS`) | Dev B | `[ ]` | Single-owner file, see Update Rules |
@@ -54,7 +54,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 - [ ] WebSocket envelope contract committed to `main`
 - [ ] Shared constants committed to `main`
 - [ ] All three mock fixtures committed to `main`
-- [ ] Repo skeleton (backend + frontend) committed to `main`
+- [x] Repo skeleton (backend + frontend) committed to `main`
 - [ ] All four developers have pulled `main` and can branch out
 
 **Phase 0 status: NOT COMPLETE — team may not yet diverge into Phase 1 workstreams.**
@@ -96,7 +96,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
-| B1 | `main.py` — FastAPI skeleton, health-check route, WS route stub (echo) | `[ ]` | |
+| B1 | `main.py` — FastAPI skeleton, health-check route, WS route stub (echo) | `[M]` | `/health` and `/ws/echo` scaffolded and pushed to `main` |
 | B2 | `orchestrator/websocket_manager.py` — connection mgmt, sequence numbers, snapshot-on-reconnect | `[ ]` | Enforces invariant 6 |
 | B3 | `orchestrator/orchestrator.py` (Monitor slice) — wraps Dev A's output as `ConjunctionAlert` events, broadcasts | `[ ]` | May use hardcoded payload until A3 lands |
 
@@ -141,7 +141,7 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
-| D1 | Vite + React shell, Tailwind w/ `ui-tokens.md`, top nav w/ placeholder routes | `[ ]` | |
+| D1 | Vite + React shell, Tailwind w/ `ui-tokens.md`, top nav w/ placeholder routes | `[M]` | Scaffolded and pushed to `main`; still needs real per-page content and a11y pass |
 | D2 | Landing page (static) — hero, stat cards, CTA buttons | `[ ]` | |
 | D3 | Shared primitives (buttons/cards/badges) | `[ ]` | Log in `ui-registry.md` when built |
 | D4 | Globe component (`components/globe/`) — one configurable component | `[ ]` | First driven by Dev A's mock `TrackedObject` fixture |
