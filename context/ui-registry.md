@@ -34,6 +34,7 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 - Mock data: `globe/mockTrackedObjects.ts` has 5 hand-written `TrackedObject`s, physically real (each one's `position_km`/`velocity_kmps` came from actually running `satellite.js`'s SGP4 propagation against a real TLE at a fixed timestamp, not fabricated numbers). `TODO(Dev A)` comment marks where to swap in the real Phase 0 fixture or live data once available.
 - **Vite config note:** `satellite.js` ships a WASM build using top-level await, which esbuild's default target can't pre-bundle. `vite.config.ts` now sets `build.target`/`optimizeDeps.esbuildOptions.target` to `'esnext'` to fix this — needed by any future code importing `satellite.js`, not just Globe.
 - Wired into `pages/Monitor.tsx` in `'live'` mode with a floating legend `Card` (object counts + accent/danger color key), verified via headless-Chromium screenshot.
+- **Hazard ring/marker recipe:** `ringColor` must be a function of the ring's progress `t` (`(t) => \`rgba(239, 68, 68, ${1 - t})\``), not a flat color string — otherwise every overlapping ring generation renders at full opacity instead of fading. Keep `ringRepeatPeriod` >= one ring's full lifetime (`ringMaxRadius / ringPropagationSpeed * 1000`, currently 3/2*1000=1500ms vs. a 1600ms repeat) so generations never overlap. Points render as `CylinderGeometry` pins — set `pointResolution={32}` (three-globe's default of 12 facets visibly at this scale). Skipping any of these three produces a jagged/scratchy hazard indicator instead of a clean pulsing ring.
 
 ### Conjunction Details
 *(side-by-side satellite stat cards, TCA/distance/probability panel)*
@@ -85,6 +86,22 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 All three accept `className` for one-off overrides and are otherwise deliberately unstyled beyond the above — build screen-specific layout (flex/grid, gaps, spacing) at the call site, not inside the primitive.
 
 **Verified against the dark theme:** screenshotted at `/monitor` (Vite dev server + headless Chromium) — primary/secondary buttons, a card, and all four badge statuses render with correct token colors and no console errors.
+
+---
+
+## Data Layer (store / lib)
+
+Not a visual component, but logged here per the usual pattern since every screen depends on it.
+
+### WebSocket Store
+`frontend/src/store/useNegotiationStore.ts` — the single Zustand store for all live state (per code-standards.md: one store, not split per feature). Holds `trackedObjects`, `activeConjunctionAlert`, `connectionStatus: 'connecting' | 'connected' | 'reconnecting' | 'disconnected'`. All WebSocket handling funnels through one `updateFromSocket(envelope)` action that switches on `envelope.type` (`snapshot` replaces `trackedObjects`/`activeConjunctionAlert` wholesale; `conjunction_alert` sets `activeConjunctionAlert`; `negotiation_message`/`resolution` are accepted but no-op until Phase 2 defines what they update; `error` logs). Also exports the `EventType`/`WebSocketEnvelope` types mirroring `schemas/websocket.py`.
+
+### WebSocket Client
+`frontend/src/lib/websocket.ts` — `useAegisSocket()` hook, named to match `architecture.md`'s Client Pattern snippet. Connects to Dev B's live `/ws/monitor`, mounted once in `App.tsx` (not per-page) so the connection and its status survive route changes — components read live state via the store, not by calling this hook themselves. Enforces: snapshot must be the first message per connection (anything else first is logged and dropped, not applied); messages with `sequence <= last seen` are discarded; on close, auto-reconnects forever at a fixed 2s interval with no retry cap, setting `connectionStatus` straight to `'reconnecting'` and holding it there for the whole outage — never `'disconnected'`, which is reserved for a possible future explicit/user-initiated disconnect and isn't reachable from the retry loop (demo-safety requirement: a backend blip during a live demo must never look like the connection gave up); every fresh connection resets local sequence-tracking state so a stale message from a dead socket can never be compared against the new one's sequence (architecture.md invariant 6 — never assume delta continuity, trust whatever snapshot arrives next).
+
+**Consumers:** `NavBar.tsx`'s live-status pill now reads real `connectionStatus` (4-state color/label map: connecting=warning, connected=success "Live", reconnecting=warning+pulse, disconnected=danger) instead of being static. `Monitor.tsx` reads live `trackedObjects`/`activeConjunctionAlert`; falls back to D4's `mockTrackedObjects.ts` whenever the live array is empty (true today, since the backend snapshot doesn't carry tracked-object state yet) so the globe stays populated either way.
+
+**Verified end-to-end:** with the real backend running, the globe correctly received B3's live `conjunction_alert` and switched to `'conjunction'` mode with a hazard ring on the matching mock satellites. Killing the backend mid-session showed `Reconnecting` (not a freeze); restarting it produced a fresh `Live` state with the alert re-applied from the new snapshot — confirmed via headless-Chromium screenshots at each stage.
 
 ---
 
