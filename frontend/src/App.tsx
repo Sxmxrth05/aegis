@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { CustomCursor } from './components/shared/CustomCursor';
 import { NavBar } from './components/shared/NavBar';
 import { useAegisSocket } from './lib/websocket';
 import Landing from './pages/Landing';
@@ -16,6 +17,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background">
+      <CustomCursor />
       <NavBar />
       <Routes>
         <Route path="/" element={<Landing />} />
