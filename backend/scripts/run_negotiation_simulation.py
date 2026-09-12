@@ -16,9 +16,16 @@ Usage:
 
 from __future__ import annotations
 
+import io
 import os
 import sys
 from datetime import datetime, timezone
+
+# Fix UnicodeEncodeError on Windows cp1252 terminals (Delta, em-dash characters)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -60,7 +67,7 @@ def print_transcript(messages: list[NegotiationMessage], resolution: Resolution)
 
 def main() -> None:
     print("=" * 75)
-    print("  AEGIS DEV C — MULTI-AGENT NEGOTIATION & VALIDATION SIMULATION")
+    print("  AEGIS DEV C - MULTI-AGENT NEGOTIATION & VALIDATION SIMULATION")
     print("=" * 75)
 
     alert = get_seeded_conjunction_alert()
