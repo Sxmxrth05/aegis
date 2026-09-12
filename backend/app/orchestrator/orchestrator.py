@@ -74,13 +74,41 @@ def load_tracked_objects_fixture() -> list[TrackedObject]:
     return [TrackedObject(**obj) for obj in raw]
 
 
+# In-process cache for load_all_tracked_objects(), keyed by nothing but a
+# TTL: every /ws/monitor connection calls this (via monitor_snapshot_payload()
+# and detect_conjunctions(), each independently), and celestrak.py's
+# get_raw_tles() always attempts a fresh live CelesTrak fetch first, with a
+# REQUEST_TIMEOUT_SECONDS=10 timeout per attempt (see celestrak.py — Dev A's
+# file, not touched here). Without this cache, every single connection pays
+# that ~10s timeout (or worse, twice — once per call site) before falling
+# back to cache, which is both a bad demo experience and log-spammy ("Live
+# fetch failed (timed out) — falling back to cache" on every connect). A short
+# TTL still lets fresh CelesTrak data show up promptly if the network recovers.
+_TRACKED_OBJECTS_CACHE_TTL_SECONDS = 60
+_tracked_objects_cache: list[TrackedObject] | None = None
+_tracked_objects_cache_at: "datetime | None" = None
+
+
 def load_all_tracked_objects() -> list[TrackedObject]:
     """
     Attempts to load and propagate all 20 locked CelesTrak satellites.
     Falls back to fixture if CelesTrak cache/propagation fails.
+    Result is cached in-process for _TRACKED_OBJECTS_CACHE_TTL_SECONDS so
+    repeated calls (e.g. one per /ws/monitor connection) don't each pay a
+    fresh live-fetch attempt/timeout.
     """
+    global _tracked_objects_cache, _tracked_objects_cache_at
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    if (
+        _tracked_objects_cache is not None
+        and _tracked_objects_cache_at is not None
+        and (now - _tracked_objects_cache_at).total_seconds() < _TRACKED_OBJECTS_CACHE_TTL_SECONDS
+    ):
+        return _tracked_objects_cache
+
     try:
-        from datetime import datetime, timezone
         try:
             from backend.app.data.celestrak import get_raw_tles
             from backend.app.agents.monitor_agent import build_satellite, propagate
@@ -89,7 +117,6 @@ def load_all_tracked_objects() -> list[TrackedObject]:
             from app.agents.monitor_agent import build_satellite, propagate
 
         raw_tles = get_raw_tles()
-        now = datetime.now(timezone.utc)
         results: list[TrackedObject] = []
         for raw in raw_tles:
             try:
@@ -106,11 +133,16 @@ def load_all_tracked_objects() -> list[TrackedObject]:
             except Exception:
                 continue
         if results:
+            _tracked_objects_cache = results
+            _tracked_objects_cache_at = now
             return results
     except Exception as e:
         logger.warning("[orchestrator] Could not load CelesTrak tracked objects (%s); falling back to fixture", e)
 
-    return load_tracked_objects_fixture()
+    fixture_results = load_tracked_objects_fixture()
+    _tracked_objects_cache = fixture_results
+    _tracked_objects_cache_at = now
+    return fixture_results
 
 
 # Physically docked/co-located object groups within the 20-object curated set
