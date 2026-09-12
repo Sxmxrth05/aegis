@@ -210,7 +210,20 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     const el = containerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      // ResizeObserver reports the container's fractional/subpixel width
+      // (e.g. 389.984375px). react-globe.gl's canvas sizing can round that
+      // up by a hair when it's applied, making the canvas a fraction of a
+      // pixel wider than the container that measured it — enough to tip
+      // the page into a horizontal scrollbar at some viewport widths.
+      // Flooring here guarantees the canvas is never larger than its
+      // container, at the actual root cause rather than clipping the
+      // symptom with overflow-x: hidden.
+      if (entry) {
+        setSize({
+          width: Math.floor(entry.contentRect.width),
+          height: Math.floor(entry.contentRect.height),
+        });
+      }
     });
     observer.observe(el);
     return () => observer.disconnect();

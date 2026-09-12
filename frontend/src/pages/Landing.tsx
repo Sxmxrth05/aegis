@@ -139,7 +139,7 @@ export default function Landing() {
   }, []);
 
   return (
-    <main className="ops-grid min-h-screen bg-background text-text-primary overflow-x-hidden">
+    <main className="ops-grid min-h-screen bg-background text-text-primary">
 
       {/* ── HERO ──────────────────────────────────────── */}
       <section
@@ -175,8 +175,8 @@ export default function Landing() {
 
         {/* LEFT copy */}
         <div
-          className="relative z-10 flex h-full flex-col justify-center px-6 pt-16 pb-10 sm:px-10 lg:px-14 lg:pt-20 lg:pb-14"
-          style={{ maxWidth: '50%', minHeight: 'inherit' }}
+          className="relative z-10 flex h-full max-w-full flex-col justify-center px-6 pt-16 pb-10 sm:px-10 lg:max-w-[50%] lg:px-14 lg:pt-20 lg:pb-14"
+          style={{ minHeight: 'inherit' }}
         >
           {/* status row */}
           <div
@@ -195,7 +195,7 @@ export default function Landing() {
           <h1
             ref={heroHeadRef}
             className="font-sans font-bold uppercase leading-[0.88] tracking-[-0.04em]"
-            style={{ fontSize: 'clamp(3.2rem,8vw,7.4rem)' }}
+            style={{ fontSize: 'clamp(2.4rem,9vw,7.4rem)' }}
           >
             <span className="block text-text-primary" style={{ opacity: 0 }}>Detect.</span>
             <span className="block text-text-primary" style={{ opacity: 0 }}>Negotiate.</span>
