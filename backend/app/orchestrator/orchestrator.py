@@ -263,3 +263,10 @@ class Orchestrator:
             await self._connections.broadcast(session_id, EventType.NEGOTIATION_MESSAGE, message)
 
         await self._connections.broadcast(session_id, EventType.RESOLUTION, resolution)
+
+        try:
+            from app.storage.db import save_completed_session
+            save_completed_session(alert, transcript, resolution)
+            logger.info("Successfully persisted negotiation session to DB")
+        except Exception as e:
+            logger.error("Failed to save negotiation session to DB: %s", e)

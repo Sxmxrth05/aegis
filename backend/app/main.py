@@ -2,6 +2,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from app.orchestrator.orchestrator import MONITOR_SESSION_ID, Orchestrator, negotiation_session_id
 from app.orchestrator.websocket_manager import ConnectionManager
+from app.storage.db import init_db
+
+init_db()
 
 app = FastAPI(title="Aegis")
 
