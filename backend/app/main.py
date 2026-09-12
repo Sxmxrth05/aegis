@@ -14,6 +14,33 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/trajectory/{conjunction_id}")
+async def get_trajectory_simulation(conjunction_id: str) -> dict:
+    from app.data.trajectory import simulate_seeded_conjunction_trajectory
+    result = simulate_seeded_conjunction_trajectory()
+    return result.model_dump()
+
+
+@app.get("/api/history")
+async def get_history_list(
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    from app.storage.db import get_history
+    return get_history(status_filter=status, limit=limit, offset=offset)
+
+
+@app.get("/api/history/{conjunction_id}")
+async def get_history_detail(conjunction_id: str) -> dict:
+    from fastapi import HTTPException
+    from app.storage.db import get_full_session_details
+    details = get_full_session_details(conjunction_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Conjunction session not found")
+    return details
+
+
 @app.websocket("/ws/echo")
 async def echo_socket(websocket: WebSocket) -> None:
     await websocket.accept()
