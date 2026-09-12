@@ -1,3 +1,7 @@
+import { animate } from 'animejs';
+import { useEffect, useRef } from 'react';
+
+import { useAnimeAppend } from '../../lib/useAnimeStagger';
 import type { NegotiationMessage } from '../globe/types';
 
 const AGENT_LABELS = {
@@ -15,13 +19,52 @@ const ACTION_TONES = {
 
 function formatUtc(timestamp: string): string {
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '-';
   return `${date.toISOString().slice(11, 19)}Z`;
+}
+
+/** Animates a numeric counter from its current displayed value to `to`. */
+function useCountUp(ref: React.RefObject<HTMLElement | null>, to: number) {
+  useEffect(() => {
+    if (!ref.current) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      ref.current.textContent = String(to).padStart(2, '0');
+      return;
+    }
+    const from = parseInt(ref.current.textContent ?? '0', 10) || 0;
+    if (from === to) return;
+    const el = ref.current;
+    animate(
+      { value: from },
+      {
+        value: to,
+        duration: 440,
+        easing: 'easeOutCubic',
+        onUpdate: (anim) => {
+          const v = Math.round((anim.targets[0] as { value: number }).value);
+          el.textContent = String(v).padStart(2, '0');
+        },
+      },
+    );
+  }, [to]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function NegotiationConsole({ messages }: { messages: NegotiationMessage[] }) {
   const latestRound = messages.reduce((highest, message) => Math.max(highest, message.round), 0);
   const validationCount = messages.filter((message) => message.agent_id === 'validation').length;
+
+  /* ── counter refs ── */
+  const recordsRef    = useRef<HTMLElement>(null);
+  const roundRef      = useRef<HTMLElement>(null);
+  const gatesRef      = useRef<HTMLElement>(null);
+
+  useCountUp(recordsRef, messages.length);
+  useCountUp(roundRef, latestRound);
+  useCountUp(gatesRef, validationCount);
+
+  /* ── tbody ref: animate newly appended rows ── */
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+  useAnimeAppend(tbodyRef, messages.length);
 
   return (
     <section className="mt-5 border border-border bg-surface-muted/75" aria-labelledby="negotiation-ledger-title">
@@ -38,15 +81,15 @@ export function NegotiationConsole({ messages }: { messages: NegotiationMessage[
         <dl className="grid grid-cols-3 divide-x divide-border border border-border font-mono text-[10px] uppercase tracking-wider">
           <div className="px-3 py-2">
             <dt className="text-text-muted">records</dt>
-            <dd className="mt-1 text-sm text-text-primary">{String(messages.length).padStart(2, '0')}</dd>
+            <dd ref={recordsRef} className="mt-1 text-sm text-text-primary">{String(messages.length).padStart(2, '0')}</dd>
           </div>
           <div className="px-3 py-2">
             <dt className="text-text-muted">round</dt>
-            <dd className="mt-1 text-sm text-text-primary">{String(latestRound).padStart(2, '0')}</dd>
+            <dd ref={roundRef} className="mt-1 text-sm text-text-primary">{String(latestRound).padStart(2, '0')}</dd>
           </div>
           <div className="px-3 py-2">
             <dt className="text-text-muted">gates</dt>
-            <dd className="mt-1 text-sm text-warning-light">{String(validationCount).padStart(2, '0')}</dd>
+            <dd ref={gatesRef} className="mt-1 text-sm text-warning-light">{String(validationCount).padStart(2, '0')}</dd>
           </div>
         </dl>
       </header>
@@ -64,7 +107,7 @@ export function NegotiationConsole({ messages }: { messages: NegotiationMessage[
               <th className="px-4 py-2.5 font-medium">evidence / narration</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody ref={tbodyRef} className="divide-y divide-border">
             {messages.length === 0 ? (
               <tr>
                 <td colSpan={7} className="h-36 px-5 py-8">
@@ -86,6 +129,7 @@ export function NegotiationConsole({ messages }: { messages: NegotiationMessage[
                   <tr
                     key={message.id}
                     className={`align-top transition-colors duration-200 hover:bg-surface-secondary/40 ${isValidation ? 'bg-warning-muted/10' : ''}`}
+                    style={{ opacity: 0 }}
                   >
                     <td className={`border-r border-border px-3 py-4 font-mono text-[10px] ${isValidation ? 'border-l-2 border-l-warning text-warning-light' : 'text-text-muted'}`}>
                       {String(index + 1).padStart(3, '0')}

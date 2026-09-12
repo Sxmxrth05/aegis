@@ -1,7 +1,11 @@
+import { animate } from 'animejs';
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Globe } from '../components/globe/Globe';
 import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
+import { useAnimeSlideIn } from '../lib/useAnimeEntry';
+import { useAnimeStagger } from '../lib/useAnimeStagger';
 import { useNegotiationStore } from '../store/useNegotiationStore';
 
 const CONNECTION_TONE = {
@@ -12,7 +16,7 @@ const CONNECTION_TONE = {
 } as const;
 
 function shortUtc(timestamp: string | undefined): string {
-  if (!timestamp) return '—';
+  if (!timestamp) return '-';
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? timestamp : `${date.toISOString().slice(0, 19)}Z`;
 }
@@ -29,6 +33,37 @@ export default function Monitor() {
     : new Set<string>();
   const hazardCount = trackedObjects.filter((object) => flaggedIds.has(object.norad_id)).length;
   const activeCount = trackedObjects.length - hazardCount;
+
+  /* ── conjunction panel slide-in from right ── */
+  const conjunctionPanelRef = useRef<HTMLElement>(null);
+  useAnimeSlideIn(conjunctionPanelRef, !!activeConjunctionAlert, { duration: 380, translateX: 24 });
+
+  /* ── miss-distance count-up when alert appears ── */
+  const missDistanceRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!activeConjunctionAlert || !missDistanceRef.current) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const target = activeConjunctionAlert.miss_distance_km;
+    const el = missDistanceRef.current;
+
+    animate(
+      { value: 0 },
+      {
+        value: target,
+        duration: 900,
+        easing: 'easeOutCubic',
+        onUpdate: (anim) => {
+          const current = (anim.targets[0] as { value: number }).value;
+          el.textContent = `${current.toFixed(3)} km`;
+        },
+      },
+    );
+  }, [activeConjunctionAlert?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── tracking register list stagger on mount ── */
+  const registerListRef = useRef<HTMLOListElement>(null);
+  useAnimeStagger(registerListRef, [trackedObjects.length]);
 
   return (
     <main className="relative min-h-[calc(100dvh-4rem)] overflow-hidden bg-background">
@@ -73,11 +108,11 @@ export default function Monitor() {
                 <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums text-danger-light">{String(hazardCount).padStart(2, '0')}</dd>
               </div>
             </dl>
-            <ol className="max-h-[16rem] divide-y divide-border overflow-y-auto">
+            <ol ref={registerListRef} className="max-h-[16rem] divide-y divide-border overflow-y-auto">
               {trackedObjects.map((object, index) => {
                 const flagged = flaggedIds.has(object.norad_id);
                 return (
-                  <li key={object.norad_id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-2.5">
+                  <li key={object.norad_id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-2.5" style={{ opacity: 0 }}>
                     <span className="font-mono text-[8px] text-text-muted">{String(index + 1).padStart(2, '0')}</span>
                     <span className="truncate text-xs text-text-secondary">{object.name}</span>
                     <span className={`font-mono text-[9px] ${flagged ? 'text-danger-light' : 'text-text-muted'}`}>{object.norad_id}</span>
@@ -89,7 +124,11 @@ export default function Monitor() {
 
           <div className="hidden min-h-[30rem] lg:block" aria-hidden="true" />
 
-          <aside className="pointer-events-auto self-start border border-border bg-background/90 backdrop-blur-sm">
+          <aside
+            ref={conjunctionPanelRef}
+            className="pointer-events-auto self-start border border-border bg-background/90 backdrop-blur-sm"
+            style={{ opacity: activeConjunctionAlert ? 0 : 1 }}
+          >
             <div className="flex items-start justify-between border-b border-border px-4 py-3">
               <div>
                 <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-danger-light">Conjunction channel</p>
@@ -116,7 +155,9 @@ export default function Monitor() {
                 <dl className="divide-y divide-border border-y border-border">
                   <div className="flex items-end justify-between gap-4 px-4 py-3">
                     <dt className="font-mono text-[8px] uppercase tracking-wider text-text-muted">Predicted miss</dt>
-                    <dd className="font-mono text-lg font-semibold tabular-nums text-danger-light">{activeConjunctionAlert.miss_distance_km.toFixed(3)} km</dd>
+                    <dd ref={missDistanceRef} className="font-mono text-lg font-semibold tabular-nums text-danger-light">
+                      {activeConjunctionAlert.miss_distance_km.toFixed(3)} km
+                    </dd>
                   </div>
                   <div className="flex items-end justify-between gap-4 px-4 py-3">
                     <dt className="font-mono text-[8px] uppercase tracking-wider text-text-muted">Relative velocity</dt>
@@ -131,7 +172,7 @@ export default function Monitor() {
                   to={`/negotiate/${activeConjunctionAlert.id}`}
                   className="block bg-danger px-4 py-3 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition duration-200 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger active:translate-y-px"
                 >
-                  Open resolution desk →
+                  Open resolution desk
                 </Link>
               </>
             ) : (
@@ -148,7 +189,7 @@ export default function Monitor() {
             ['Object epoch', shortUtc(trackedObjects[0]?.timestamp_utc)],
             ['Alert threshold', '5.000 km'],
             ['Display mode', activeConjunctionAlert ? 'CONJUNCTION' : 'LIVE'],
-            ['Frame', 'ECI → GEODETIC'],
+            ['Frame', 'ECI -> GEODETIC'],
           ].map(([label, value], index) => (
             <div key={label} className={`px-4 py-3 ${index > 0 ? 'border-t border-border sm:border-t-0 sm:border-l' : ''} ${index === 2 ? 'sm:border-t lg:border-t-0' : ''}`}>
               <p className="font-mono text-[8px] uppercase tracking-wider text-text-muted">{label}</p>
