@@ -115,6 +115,41 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Themed scrollbars everywhere — replaces the OS-default white/grey bar
+   (jarring against this dark UI) on the page itself and on every internal
+   scrollable region (e.g. Monitor's Tracking Register list). Firefox uses
+   scrollbar-color/-width; Chromium/Edge/Safari use the ::-webkit- pseudo
+   elements. Thin, dark track, subtle thumb that brightens to accent on
+   hover — no functionality removed, just no longer looks like a stock
+   browser control dropped onto a themed page. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-light) var(--color-background);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-light);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-background);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-accent);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--color-background);
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
