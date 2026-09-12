@@ -222,6 +222,13 @@ a {
   font-size: 8px;
 }
 
+.globe-hud__marker--cluster { pointer-events: auto; cursor: default; }
+.globe-hud__marker--cluster .globe-hud__marker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 .globe-hud__marker--alert { color: #fecaca; }
 .globe-hud__marker--alert .globe-hud__marker-dot {
   border-color: #fecaca;
