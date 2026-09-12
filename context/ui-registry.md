@@ -53,11 +53,11 @@ Built in `frontend/src/pages/Negotiate.tsx`, replacing the placeholder route. Al
 
 ### Negotiation Console
 *(two-column live transcript, round-stage tracker)*
-← Agent fills this in when built
+Built in `frontend/src/components/negotiation/NegotiationConsole.tsx` — maps over `messages` from the store, rendering Operator A on the left, Operator B on the right, and Validation Agent centered. Uses existing `Card` and `Badge` primitives.
 
 ### Negotiation Result
 *(agreed plan card, rationale block, mini trajectory preview)*
-← Agent fills this in when built
+Built in `frontend/src/components/negotiation/ResolutionCard.tsx` — displays final agreed maneuver (delta-V, expected miss distance, residual risk) and rationale text. Handles the 'no safe maneuver found' state distinctly. Mini trajectory preview pending Phase 2 Globe enhancements.
 
 ### Trajectory Simulation
 *(globe in before/after mode, timeline scrubber)*

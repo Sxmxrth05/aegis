@@ -30,3 +30,33 @@ export type ConjunctionAlert = {
   status: ConjunctionStatus;
   created_at: string;
 };
+
+export type AgentId = 'operator_A' | 'operator_B' | 'validation';
+export type ProposedAction = 'maneuver' | 'stand_down' | 'reject' | 'approve';
+
+export type NegotiationMessage = {
+  id: string;
+  conjunction_id: string;
+  agent_id: AgentId;
+  round: number;
+  yield_score: number | null;
+  justification_text: string;
+  proposed_action: ProposedAction;
+  created_at: string;
+};
+
+export type ResolutionStatus = 'approved' | 'approved_no_action' | 'no_safe_maneuver_found';
+
+export type Resolution = {
+  id: string;
+  conjunction_id: string;
+  maneuvering_agent: string;
+  maneuver_type: string;
+  delta_v_mps: number;
+  execution_time_utc: string;
+  expected_min_distance_km: number;
+  residual_risk: number;
+  rationale_text: string;
+  status: ResolutionStatus;
+};
+

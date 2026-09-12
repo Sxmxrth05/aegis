@@ -1,5 +1,8 @@
 import { useState } from 'react';
 
+import { NegotiationConsole } from '../components/negotiation/NegotiationConsole';
+import { ResolutionCard } from '../components/negotiation/ResolutionCard';
+
 import { Badge } from '../components/shared/Badge';
 import { Button } from '../components/shared/Button';
 import { Card } from '../components/shared/Card';
@@ -67,28 +70,24 @@ function SatelliteCard({ label, obj }: { label: string; obj: TrackedObject | und
 export default function Negotiate() {
   const activeConjunctionAlert = useNegotiationStore((s) => s.activeConjunctionAlert);
   const liveTrackedObjects = useNegotiationStore((s) => s.trackedObjects);
+  const messages = useNegotiationStore((s) => s.messages);
+  const resolution = useNegotiationStore((s) => s.resolution);
+  
   const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
 
   const [negotiationStarted, setNegotiationStarted] = useState(false);
-  const [messageCount, setMessageCount] = useState(0);
 
   const negotiationUrl = activeConjunctionAlert
     ? buildNegotiationWsUrl(activeConjunctionAlert.id)
     : undefined;
 
-  // Page-local connection, not the app-wide /ws/monitor one — updateStore
-  // is false so this never touches the global store or NavBar's status
-  // pill. Per this task's scope: just prove the trigger works and data
-  // flows, so every message is logged to console, not rendered as a
-  // transcript yet (that's the Negotiation Console, a separate task).
+  // Page-local connection for the negotiation engine stream. updateStore is
+  // now true since the store has been extended to handle negotiation messages
+  // and safely merge snapshots without clobbering monitor state.
   useAegisSocket({
     url: negotiationUrl,
     enabled: negotiationStarted && !!negotiationUrl,
-    updateStore: false,
-    onEnvelope: (envelope: WebSocketEnvelope) => {
-      console.log('[negotiation]', envelope.type, envelope);
-      setMessageCount((count) => count + 1);
-    },
+    updateStore: true,
   });
 
   if (!activeConjunctionAlert) {
@@ -154,7 +153,7 @@ export default function Negotiate() {
             <p className="text-sm font-semibold text-text-primary">Agent Negotiation</p>
             <p className="mt-1 text-xs text-text-muted">
               {negotiationStarted
-                ? `Connected to /ws/negotiation/${activeConjunctionAlert.id} — ${messageCount} message(s) received (see console).`
+                ? `Connected to /ws/negotiation/${activeConjunctionAlert.id} — rendering transcript.`
                 : 'Not started. Opens a live WebSocket to the negotiation engine.'}
             </p>
           </div>
@@ -167,6 +166,10 @@ export default function Negotiate() {
           </Button>
         </div>
       </Card>
+
+      <NegotiationConsole messages={messages} />
+      <ResolutionCard resolution={resolution} />
     </div>
   );
 }
+

@@ -132,12 +132,12 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 ---
 
 ### Workstream D — Frontend Experience & WebSocket Client
-**Owner:** Dev D (D1, D3–D6 covered by Dev B while Dev D was tied up — see each row's notes)
-**Current task:** Phase 2 D — Conjunction Details screen (mock-first)
-**Status:** 6 of 6 Phase 1 tasks complete; Phase 2 D workstream starting
+**Owner:** Dev D
+**Current task:** D Phase 2 — History table
+**Status:** Negotiation Console and Result Card complete and wired
 **Blocked by:** Nothing
-**Waiting on:** Nothing (backend `/ws/negotiation/{id}` live; fixtures in `backend/app/data/fixtures/`)
-**Next:** Extend store for Phase 2 events → Conjunction Details screen
+**Waiting on:** Nothing
+**Next:** History table then empty state for no safe maneuver
 **Merge status:** D1 (`main`), D3 (`dev-d/shared-primitives`), D4 (`dev-d/globe-component` + follow-up fixes on `dev-d/globe-fixes`), D5 and D6 (`dev-d/globe-fixes`) all merged to `main`. D2 not started.
 
 | Task ID | Task | Status | Notes |
