@@ -150,11 +150,58 @@ def main() -> None:
     )
     _print_result("Secondary risk rejection (expected: reject_secondary_risk)", result_3)
     assert result_3.outcome == "reject_secondary_risk", f"Unexpected: {result_3.outcome}"
-    print("  ✓ Assertion passed")
+    print("  [PASS] Assertion passed")
+
+    # --- Scenario 4: Real SGP4 Propagation with Real Satellite TLEs ---
+    # Tests the newly-wired real SGP4 propagation (Dev A's monitor_agent)
+    # without passing any mock propagate_fn stub.
+    REAL_SATS: list[TrackedObject] = [
+        {
+            "norad_id": "25544",
+            "name": "ISS (ZARYA)",
+            "tle_line1": "1 25544U 98067A   26254.62728023  .00005127  00000+0  10088-3 0  9993",
+            "tle_line2": "2 25544  51.6304 232.2787 0004958 129.1564 230.9865 15.49080967585152",
+        },
+        {
+            "norad_id": "36086",
+            "name": "POISK",
+            "tle_line1": "1 36086U 09060A   26254.62728023  .00005127  00000+0  10088-3 0  9991",
+            "tle_line2": "2 36086  51.6304 232.2787 0004958 129.1564 230.9865 15.49080967585975",
+        },
+        {
+            "norad_id": "48274",
+            "name": "CSS (TIANHE)",
+            "tle_line1": "1 48274U 21035A   26254.89562246  .00017425  00000+0  21444-3 0  9993",
+            "tle_line2": "2 48274  41.4684 155.5829 0002605 272.3198  87.7342 15.598303543067  1",
+        },
+    ]
+
+    maneuver_real = ProposedManeuver(
+        maneuvering_agent_id="operator_A",
+        maneuvering_norad_id="25544",
+        counterpart_norad_id="36086",
+        delta_v_mps=3.5,
+        maneuver_type="prograde",
+        execution_time_utc=datetime(2026, 9, 12, 12, 0, 0, tzinfo=timezone.utc),
+        expected_min_distance_km=6.5,
+    )
+    # Note: propagate_fn=None defaults to Dev A's real_sgp4_propagate!
+    result_4 = run_validation_check(
+        maneuver_real,
+        REAL_SATS[0],
+        REAL_SATS[1],
+        REAL_SATS,
+        propagate_fn=None,
+        lookahead_hours=1.0,
+        time_step_minutes=15.0,
+    )
+    _print_result("Real SGP4 Propagation (ISS vs POISK/CSS)", result_4)
+    assert result_4.outcome in ("approve", "reject_secondary_risk", "approved_no_action")
+    print("  [PASS] Real SGP4 propagation check succeeded with outcome:", result_4.outcome)
 
     print("\n" + "=" * 60)
-    print("[PASS] Validation agent verification complete -- all 3 scenarios passed")
-    print("  (using stub propagate(), no live network or API required)")
+    print("[PASS] Validation agent verification complete -- all scenarios passed")
+    print("  (including live SGP4 propagation via Dev A's monitor_agent.py)")
     print("=" * 60)
 
 

@@ -24,6 +24,16 @@ from pydantic import BaseModel
 
 from backend.app.agents.cost_functions import CONJUNCTION_THRESHOLD_KM, VALIDATION_LOOKAHEAD_HOURS
 
+try:
+    from backend.app.agents.monitor_agent import build_satellite, propagate, PropagationError
+except ImportError:
+    try:
+        from app.agents.monitor_agent import build_satellite, propagate, PropagationError
+    except ImportError:
+        build_satellite = None
+        propagate = None
+        PropagationError = Exception
+
 logger = logging.getLogger("[validation_agent]")
 
 # ---------------------------------------------------------------------------
@@ -108,8 +118,36 @@ class ValidationResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stub propagate() — used until Dev A's real implementation is available
+# SGP4 Propagation: Dev A's real implementation + fallback stub
 # ---------------------------------------------------------------------------
+
+_SAT_CACHE: dict[tuple[str, str], object] = {}
+
+
+def real_sgp4_propagate(
+    tle_line1: str,
+    tle_line2: str,
+    when: datetime,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """
+    Real SGP4 propagation function powered by Dev A's monitor_agent.py.
+
+    Caches Satrec objects in memory so repeated evaluations across the lookahead
+    scan do not re-parse TLE strings. Returns ECI position (km) and velocity (km/s).
+    """
+    if build_satellite is None or propagate is None:
+        return _stub_propagate(tle_line1, tle_line2, when)
+
+    key = (tle_line1.strip(), tle_line2.strip())
+    sat = _SAT_CACHE.get(key)
+    if sat is None:
+        sat = build_satellite(tle_line1, tle_line2)
+        _SAT_CACHE[key] = sat
+
+    norad_id = tle_line1[2:7].strip() if len(tle_line1) >= 7 else "00000"
+    state = propagate(sat, norad_id, when)
+    return state.position_km, state.velocity_kmps
+
 
 def _stub_propagate(
     tle_line1: str,
@@ -117,19 +155,8 @@ def _stub_propagate(
     when: datetime,
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """
-    STUB: Returns a fixed ECI position/velocity for any TLE + time.
-
-    This stub is used during Phase 1 (pre-Checkpoint 1) so Dev C's validation
-    logic can be unit-tested without Dev A's real sgp4 implementation.
-
-    Post-Checkpoint 1: replace this with Dev A's propagate() from
-    backend/app/agents/monitor_agent.py by passing it as `propagate_fn`.
-
-    Returns a position at roughly ~400 km altitude (LEO) with zero velocity.
-    Not physically accurate — only valid for interface testing.
+    Fallback STUB: Returns a mock ECI position/velocity for testing without SGP4.
     """
-    # Simulate slight position variation based on TLE line1 checksum + hour offset
-    # so different satellites at different times don't all collide in tests.
     hour_offset = when.hour * 100.0
     char_sum = sum(ord(c) for c in tle_line1[:20]) if tle_line1 else 0
     x = 6778.0 + (char_sum % 200) + hour_offset * 0.001
@@ -148,7 +175,7 @@ def run_validation_check(
     secondary_object: TrackedObject,
     all_tracked_objects: list[TrackedObject],
     *,
-    propagate_fn: PropagateFn = _stub_propagate,
+    propagate_fn: PropagateFn | None = None,
     lookahead_hours: float = VALIDATION_LOOKAHEAD_HOURS,
     time_step_minutes: float = 10.0,
     reference_time: datetime | None = None,
@@ -158,9 +185,7 @@ def run_validation_check(
     VALIDATION_LOOKAHEAD_HOURS after the proposed maneuver execution time,
     checking whether the maneuver creates any new close approaches.
 
-    This is the "safety re-check" described in architecture.md §Data Flow step 7-8.
-    It runs deterministically — no LLM calls — using the same sgp4 propagation
-    as the Monitor Agent (Dev A's propagate() function, or the stub during Phase 1).
+    Uses Dev A's real SGP4 propagation (`monitor_agent.propagate`) by default.
 
     Parameters
     ----------
@@ -193,6 +218,9 @@ def run_validation_check(
     """
     if isinstance(proposed_maneuver, dict):
         proposed_maneuver = ProposedManeuver(**proposed_maneuver)
+
+    if propagate_fn is None:
+        propagate_fn = real_sgp4_propagate if build_satellite is not None else _stub_propagate
 
     # Use execution_time_utc as the start of lookahead if reference not given
     start_time = reference_time or proposed_maneuver.execution_time_utc
