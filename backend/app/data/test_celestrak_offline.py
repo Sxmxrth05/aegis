@@ -8,7 +8,13 @@ directly so you can verify the logic before relying on a live connection.
 from datetime import datetime, timezone
 from pathlib import Path
 
-from celestrak import parse_tle_text, write_cache, read_cache, LOCKED_OBJECTS
+try:
+    from backend.app.data.celestrak import parse_tle_text, write_cache, read_cache, LOCKED_OBJECTS
+except ImportError:
+    try:
+        from app.data.celestrak import parse_tle_text, write_cache, read_cache, LOCKED_OBJECTS
+    except ImportError:
+        from celestrak import parse_tle_text, write_cache, read_cache, LOCKED_OBJECTS
 
 # The exact text you pulled live from CelesTrak's `stations` group.
 SAMPLE_TLE_TEXT = """ISS (ZARYA)             
@@ -55,6 +61,10 @@ def run():
 
     print("\nAll offline checks passed.")
     TEST_CACHE_PATH.unlink()  # clean up test artifact
+
+
+def test_celestrak_offline():
+    run()
 
 
 if __name__ == "__main__":

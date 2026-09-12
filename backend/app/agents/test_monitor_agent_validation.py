@@ -9,7 +9,13 @@ check, not something we invented ourselves.
 
 from datetime import datetime, timezone
 
-from monitor_agent import build_satellite, propagate
+try:
+    from backend.app.agents.monitor_agent import build_satellite, propagate
+except ImportError:
+    try:
+        from app.agents.monitor_agent import build_satellite, propagate
+    except ImportError:
+        from monitor_agent import build_satellite, propagate
 
 # Reference TLE and expected output, taken directly from the sgp4 package's
 # published documentation (pypi.org/project/sgp4).
@@ -53,6 +59,10 @@ def run():
     print("  OK  velocity within tolerance")
 
     print("\nA2 validation passed: propagation matches the known reference.")
+
+
+def test_iss_propagation():
+    run()
 
 
 if __name__ == "__main__":
