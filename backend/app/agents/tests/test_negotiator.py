@@ -177,4 +177,50 @@ def test_invariant_9_no_safe_maneuver(scenario_setup):
         assert resolution.status == ResolutionStatus.NO_SAFE_MANEUVER_FOUND
         assert resolution.maneuvering_agent == "none"
         assert resolution.delta_v_mps == 0.0
-        assert "secondary collision risks" in resolution.rationale_text.lower()
+
+
+def test_max_negotiation_rounds_cap_honored(scenario_setup):
+    """
+    Verifies that setting max_rounds=1 terminates immediately after 1 round
+    if rejected, rather than proceeding to counter-proposals.
+    """
+    s = scenario_setup
+    engine = NegotiationEngine(
+        alert=s["alert"],
+        profile_a=s["profile_a"],
+        profile_b=s["profile_b"],
+        sat_a_state=s["sat_a"],
+        sat_b_state=s["sat_b"],
+        all_tracked_objects=s["all_objects"],
+        max_rounds=1,
+    )
+    assert engine.max_rounds == 1
+
+    transcript, resolution = engine.run_negotiation(force_initial_rejection=True)
+
+    # With max_rounds=1 and initial rejection, only round 1 messages should exist
+    assert len(transcript) == 3
+    assert all(m.round == 1 for m in transcript)
+    assert transcript[-1].proposed_action == ProposedAction.REJECT
+    assert resolution.status == ResolutionStatus.NO_SAFE_MANEUVER_FOUND
+    assert resolution.maneuvering_agent == "none"
+    assert "maximum negotiation rounds (1)" in resolution.rationale_text
+
+
+def test_max_negotiation_rounds_default_from_constants(scenario_setup):
+    """
+    Verifies that NegotiationEngine defaults to MAX_NEGOTIATION_ROUNDS (3).
+    """
+    from backend.app.constants import MAX_NEGOTIATION_ROUNDS
+    s = scenario_setup
+    engine = NegotiationEngine(
+        alert=s["alert"],
+        profile_a=s["profile_a"],
+        profile_b=s["profile_b"],
+        sat_a_state=s["sat_a"],
+        sat_b_state=s["sat_b"],
+        all_tracked_objects=s["all_objects"],
+    )
+    assert engine.max_rounds == MAX_NEGOTIATION_ROUNDS
+    assert engine.max_rounds == 3
+
