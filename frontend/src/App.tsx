@@ -47,6 +47,5 @@ function AppShell() {
         </Routes>
       </div>
     </>
->>>>>>> 0e5f2d0 (update ui)
   );
 }
