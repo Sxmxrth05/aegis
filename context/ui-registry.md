@@ -38,7 +38,12 @@ Built in `frontend/src/components/globe/Globe.tsx` — one `react-globe.gl` inst
 
 ### Conjunction Details
 *(side-by-side satellite stat cards, TCA/distance/probability panel)*
-← Agent fills this in when built
+Built in `frontend/src/pages/Negotiate.tsx`, replacing the placeholder route. All built from D3's `Card`/`Badge`/`Button` primitives, no new component files:
+- Reads `activeConjunctionAlert`/`trackedObjects` from `useNegotiationStore` — same store Monitor.tsx reads, not a separate fetch. Honest empty state (`Card` with explanatory text) when there's no active alert yet, rather than fabricating one.
+- **Two satellite stat cards** (`SatelliteCard`, a local component in the same file): `name`/`norad_id` direct from `TrackedObject`; `Altitude` and `Velocity` are real, computed client-side from `position_km`/`velocity_kmps` (vector magnitude, altitude = `|position_km| - 6371`) — not fabricated, not from the backend directly. `Operator`, `Fuel Δv margin`, `Mission priority`, `Maneuverability` are shown as `TBD` (muted, `font-mono`) with a one-line caption explaining why — these concepts exist in the backend (`OperatorProfile`'s `mvi`/`fuel_margin_pct`/`delta_v_mps`) but aren't part of any payload the frontend currently receives pre-negotiation, so labeling them TBD is the honest choice per this project's "never fabricate a number" ethos.
+- **Conjunction Assessment card**: `tca_utc`, `miss_distance_km`, `relative_velocity_kmps` direct from `ConjunctionAlert`; `Collision probability` shown as `TBD` — no such field exists in the schema.
+- Status `Badge` mapped from `ConjunctionStatus`: `alerted`/`escalated` → danger, `negotiating` → warning, `resolved`/`stood_down` → success.
+- **"Start Agent Negotiation" button**: on click, opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (see Data Layer section below for the `useAegisSocket` variant this needed) — every incoming envelope is `console.log`'d and counted; no transcript UI yet (that's the Negotiation Console, a separate task). Button disables and relabels once started.
 
 ### Negotiation Console
 *(two-column live transcript, round-stage tracker)*
@@ -102,6 +107,8 @@ Not a visual component, but logged here per the usual pattern since every screen
 **Consumers:** `NavBar.tsx`'s live-status pill now reads real `connectionStatus` (4-state color/label map: connecting=warning, connected=success "Live", reconnecting=warning+pulse, disconnected=danger) instead of being static. `Monitor.tsx` reads live `trackedObjects`/`activeConjunctionAlert`; falls back to D4's `mockTrackedObjects.ts` whenever the live array is empty (true today, since the backend snapshot doesn't carry tracked-object state yet) so the globe stays populated either way.
 
 **Verified end-to-end:** with the real backend running, the globe correctly received B3's live `conjunction_alert` and switched to `'conjunction'` mode with a hazard ring on the matching mock satellites. Killing the backend mid-session showed `Reconnecting` (not a freeze); restarting it produced a fresh `Live` state with the alert re-applied from the new snapshot — confirmed via headless-Chromium screenshots at each stage.
+
+**`useAegisSocket()` options (added for the Conjunction Details screen):** now takes an options object — `{ url?, enabled?, onEnvelope?, updateStore? }` — all optional, so the existing no-arg call in `App.tsx` is unaffected. `enabled` (default `true`) lets a connection be created on a user action instead of on mount — pass `false` until then, since hooks must still be called unconditionally on every render. `updateStore` (default `true`) controls whether this connection writes into the shared store at all; the one persistent `/ws/monitor` connection in `App.tsx` keeps `updateStore: true` (it owns `connectionStatus` for NavBar's pill), while a secondary connection — e.g. `Negotiate.tsx`'s per-negotiation socket to `/ws/negotiation/{id}` — passes `updateStore: false` so it can't cross-talk with the global store or make NavBar's status flicker based on an unrelated connection. `onEnvelope` receives every in-order, post-snapshot envelope regardless of `updateStore`; it's held in a `ref` internally so passing a fresh inline arrow function each render doesn't tear down and reconnect the socket. Also added `buildNegotiationWsUrl(conjunctionId)`, which derives the negotiation URL from wherever `VITE_WS_URL`/the hardcoded default points the monitor socket, so both routes share one source of truth for host/port.
 
 ---
 

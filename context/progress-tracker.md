@@ -256,14 +256,14 @@ _No checkpoint session has occurred yet._
 ---
 
 ### Workstream D — Negotiation & Resolution UI
-**Owner:** Dev D (opportunistic pairing with A/B once their Phase 2 tasks land)
-**Status:** Not started (blocked until Checkpoint 1 passes)
+**Owner:** Dev D (opportunistic pairing with A/B once their Phase 2 tasks land) — Conjunction Details covered by Dev B while Dev D is tied up
+**Status:** Conjunction Details screen built and live-verified; remaining screens not started
 **Depends on:** Mock transcript/resolution fixtures (Phase 0), then Dev B/C's live events
-**Next:** Conjunction Details screen (mock-first)
+**Next:** Negotiation Console (two-column transcript) — the console itself, not just the trigger button this task stopped short of
 
 | Task | Status | Notes |
 |---|---|---|
-| Conjunction Details screen | `[ ]` | Mock-first, then wired to real alert data (already flowing post-Checkpoint 1) |
+| Conjunction Details screen | `[x]` | Dev B (covering Dev D). Not yet merged. Built directly against real live data in `pages/Negotiate.tsx` — skipped the mock-first step since real `activeConjunctionAlert`/`trackedObjects` were already flowing through `useNegotiationStore` by this point (Checkpoint-1-equivalent pieces already merged). Side-by-side satellite stat cards show real computed `Altitude`/`Velocity` (from `position_km`/`velocity_kmps`) plus `Operator`/`Fuel Δv margin`/`Mission priority`/`Maneuverability` as explicit `TBD` — those concepts exist backend-side (`OperatorProfile`) but aren't in any payload the frontend receives pre-negotiation, so TBD rather than fabricated. Conjunction Assessment card shows real `tca_utc`/`miss_distance_km`/`relative_velocity_kmps`, `Collision probability` as `TBD` (no such field in the schema). Built entirely from D3's `Button`/`Card`/`Badge`. **"Start Agent Negotiation" button** opens a second, page-local WebSocket to `/ws/negotiation/{conjunctionId}` (via a new options-based variant of `useAegisSocket()` — see `lib/websocket.ts` in ui-registry.md's Data Layer section) and logs every envelope to console with a live count — **this is intentionally not the Negotiation Console yet**, just proof the trigger works end-to-end; the console/transcript UI is the next task. **Verified live** (not mocked): loaded `/negotiate` with the real backend running, confirmed real satellite names/NORAD IDs/computed altitude-velocity/TCA/miss-distance render (not mock fixture text); clicked the button and confirmed via headless-Chromium console capture that `snapshot` → 3× `negotiation_message` → `resolution` all arrived in order with correct sequence numbers, screenshotted before and after. |
 | Negotiation Console (two-column transcript, round-stage tracker) | `[ ]` | Mock transcript first, then Dev B's live events |
 | Negotiation Result screen | `[ ]` | Mock resolution first |
 | "No Safe Maneuver Found" state | `[ ]` | Explicit, honest UI treatment (invariant 9) |
