@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 
+import { useGlobeStage } from '../globe/GlobeStage';
 import { useNegotiationStore, type ConnectionStatus } from '../../store/useNegotiationStore';
 
 const links = [
@@ -21,6 +22,8 @@ const STATUS_DISPLAY: Record<ConnectionStatus, { label: string; dotClassName: st
 
 export function NavBar() {
   const connectionStatus = useNegotiationStore((s) => s.connectionStatus);
+  const location = useLocation();
+  const { navigateToMonitor } = useGlobeStage();
   const { label, dotClassName } = STATUS_DISPLAY[connectionStatus];
 
   return (
@@ -36,6 +39,12 @@ export function NavBar() {
           <NavLink
             key={link.to}
             to={link.to}
+            onClick={(event) => {
+              if (link.to === '/monitor' && location.pathname === '/') {
+                event.preventDefault();
+                navigateToMonitor();
+              }
+            }}
             className={({ isActive }) =>
               isActive
                 ? 'border-b border-accent pb-1 font-mono text-[10px] font-medium uppercase tracking-wider text-text-primary'

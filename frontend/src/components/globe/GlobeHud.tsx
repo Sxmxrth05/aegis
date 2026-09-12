@@ -18,11 +18,6 @@ type HudMarker = {
 export function GlobeHud({ markers }: { markers: HudMarker[] }) {
   return (
     <div className="globe-hud" aria-hidden="true">
-      <svg className="globe-hud__frame" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <path d="M1 10V1h9M90 1h9v9M99 90v9h-9M10 99H1v-9" />
-        <path className="globe-hud__hairline" d="M50 0v8M50 92v8M0 50h8M92 50h8" />
-      </svg>
-      <div className="globe-hud__reticle">ECI → GEO</div>
       {markers.map((marker) => {
         const isCluster = marker.count > 1;
         return (

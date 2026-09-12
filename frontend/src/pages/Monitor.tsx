@@ -1,8 +1,9 @@
 import { animate } from 'animejs';
+import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
-import { Globe } from '../components/globe/Globe';
+import { useGlobeStage } from '../components/globe/GlobeStage';
 import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
 import { useAnimeSlideIn } from '../lib/useAnimeEntry';
 import { useAnimeStagger } from '../lib/useAnimeStagger';
@@ -25,6 +26,7 @@ export default function Monitor() {
   const liveTrackedObjects = useNegotiationStore((state) => state.trackedObjects);
   const activeConjunctionAlert = useNegotiationStore((state) => state.activeConjunctionAlert);
   const connectionStatus = useNegotiationStore((state) => state.connectionStatus);
+  const { setGlobeStage, phase, isMonitorChromeVisible } = useGlobeStage();
 
   const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
   const usingLiveData = liveTrackedObjects.length > 0;
@@ -33,6 +35,14 @@ export default function Monitor() {
     : new Set<string>();
   const hazardCount = trackedObjects.filter((object) => flaggedIds.has(object.norad_id)).length;
   const activeCount = trackedObjects.length - hazardCount;
+
+  useEffect(() => {
+    if (phase === 'monitor-enter') return;
+    setGlobeStage({
+      mode: 'monitor',
+      conjunctionAlert: activeConjunctionAlert ?? undefined,
+    });
+  }, [activeConjunctionAlert, phase, setGlobeStage]);
 
   /* ── conjunction panel slide-in from right ── */
   const conjunctionPanelRef = useRef<HTMLElement>(null);
@@ -66,18 +76,15 @@ export default function Monitor() {
   useAnimeStagger(registerListRef, [trackedObjects.length]);
 
   return (
-    <main className="relative min-h-[calc(100dvh-4rem)] overflow-hidden bg-background">
-      <div className="absolute inset-0">
-        <Globe
-          trackedObjects={trackedObjects}
-          mode={activeConjunctionAlert ? 'conjunction' : 'live'}
-          conjunctionAlert={activeConjunctionAlert ?? undefined}
-        />
-      </div>
-
+    <main className="pointer-events-none relative min-h-[calc(100dvh-4rem)] overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,14,23,0.94)_0%,rgba(10,14,23,0.32)_28%,transparent_50%,rgba(10,14,23,0.18)_76%,rgba(10,14,23,0.78)_100%)]" />
 
-      <div className="pointer-events-none relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] max-w-[1600px] grid-rows-[auto_1fr_auto] p-4 sm:p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: isMonitorChromeVisible ? 1 : 0, y: isMonitorChromeVisible ? 0 : 10 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-none relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] max-w-[1600px] grid-rows-[auto_1fr_auto] p-4 sm:p-6"
+      >
         <header className="pointer-events-auto grid gap-3 border border-border bg-background/88 px-4 py-3 backdrop-blur-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <h1 className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-text-primary">Orbital watch floor</h1>
@@ -197,7 +204,7 @@ export default function Monitor() {
             </div>
           ))}
         </footer>
-      </div>
+      </motion.div>
     </main>
   );
 }

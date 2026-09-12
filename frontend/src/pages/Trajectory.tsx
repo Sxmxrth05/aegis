@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Globe } from '../components/globe/Globe';
+import { useGlobeStage } from '../components/globe/GlobeStage';
 import { Card } from '../components/shared/Card';
 import { Badge } from '../components/shared/Badge';
 import { Button } from '../components/shared/Button';
@@ -11,6 +11,7 @@ export default function Trajectory() {
   const [data, setData] = useState<ManeuverTrajectoryResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
+  const { setGlobeStage } = useGlobeStage();
 
   useEffect(() => {
     if (!id) return;
@@ -35,6 +36,38 @@ export default function Trajectory() {
     return () => { canceled = true; };
   }, [id]);
 
+  useEffect(() => {
+    if (!data) {
+      setGlobeStage({ mode: 'hidden' });
+      return;
+    }
+
+    const step = data.steps[stepIndex];
+    if (!step) return;
+    setGlobeStage({
+      mode: 'trajectory',
+      trajectoryResult: data,
+      trackedObjects: [
+        {
+          norad_id: data.primary_norad_id,
+          name: data.primary_name,
+          tle_line1: '', tle_line2: '',
+          timestamp_utc: step.timestamp_utc,
+          position_km: step.maneuvered_primary.position_km,
+          velocity_kmps: step.maneuvered_primary.velocity_kmps,
+        },
+        {
+          norad_id: data.secondary_norad_id,
+          name: data.secondary_name,
+          tle_line1: '', tle_line2: '',
+          timestamp_utc: step.timestamp_utc,
+          position_km: step.maneuvered_secondary.position_km,
+          velocity_kmps: step.maneuvered_secondary.velocity_kmps,
+        },
+      ],
+    });
+  }, [data, setGlobeStage, stepIndex]);
+
   if (loading) {
     return <div className="p-8 text-text-muted">Loading trajectory data...</div>;
   }
@@ -45,36 +78,10 @@ export default function Trajectory() {
 
   const step = data.steps[stepIndex];
   
-  const trackedObjects = [
-    {
-      norad_id: data.primary_norad_id,
-      name: data.primary_name,
-      tle_line1: '', tle_line2: '',
-      timestamp_utc: step.timestamp_utc,
-      position_km: step.maneuvered_primary.position_km,
-      velocity_kmps: step.maneuvered_primary.velocity_kmps
-    },
-    {
-      norad_id: data.secondary_norad_id,
-      name: data.secondary_name,
-      tle_line1: '', tle_line2: '',
-      timestamp_utc: step.timestamp_utc,
-      position_km: step.maneuvered_secondary.position_km,
-      velocity_kmps: step.maneuvered_secondary.velocity_kmps
-    }
-  ];
-
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full flex-col md:flex-row relative">
-      <Globe 
-        trackedObjects={trackedObjects}
-        mode="trajectory"
-        trajectoryResult={data}
-        className="flex-1"
-      />
-      
+    <div className="pointer-events-none relative flex h-[calc(100vh-4rem)] w-full flex-col md:flex-row">
       {/* Overlay panel */}
-      <div className="absolute top-6 right-6 w-80 space-y-4">
+      <div className="pointer-events-auto absolute top-6 right-6 w-80 space-y-4">
         <Card className="bg-surface/90 backdrop-blur">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-text-primary">Trajectory Simulation</h3>

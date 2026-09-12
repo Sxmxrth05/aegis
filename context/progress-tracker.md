@@ -286,6 +286,14 @@ _No checkpoint session has occurred yet._
 
 **2026-09-12 Dev D twilight pass:** Tuned the existing Globe’s `MeshPhongMaterial`, directional/ambient light, Fresnel rim, and bloom to retain night lights but make Earth relief legible without a full-scene blue wash. Typecheck/lint pass.
 
+**2026-09-12 Dev D persistent Hero-to-Monitor stage:** Added `components/globe/GlobeStage.tsx`, mounting one Globe canvas above the router and moving Landing, Monitor, and Trajectory to stage-profile requests. The Hero CTA and Monitor nav route both preserve the canvas; Framer Motion `layoutId="globe-stage"` and `GlobeHandle.pointOfView(..., 850)` begin together. Browser-verified one canvas through both routes and Hero scroll remained pinned at 64px. Typecheck/lint pass.
+
+**2026-09-13 Dev D cinematic stage correction:** Replaced the fixed Hero stage with document-positioned layout so it scrolls away with the Hero. Landing → Monitor now uses a three-phase handoff (copy exit, centered globe, Monitor expansion/chrome entry); both the Hero CTA and nav trigger it. Reworked the pointer-event stack so empty Monitor space reaches the canvas while header/panels/footer remain interactive. Browser verified one canvas, mid-transition Hero opacity `0`, canvas hit target in Monitor, and typecheck/lint pass.
+
+**2026-09-13 Dev D HUD cleanup:** Removed decorative GlobeHud corner brackets, crosshair hairlines, and the `ECI → GEO` reticle from every Globe presentation. Projected satellite markers and hazard labels remain unchanged.
+
+**2026-09-13 Dev D handoff refinement:** Replaced the three-stage Hero → Monitor canvas sequence with one direct 820ms shared-layout/camera move after a 180ms Hero-copy release. The hero's rightward canvas offset now eases to centre inside the same move, a temporary radial veil masks the WebGL resize, and Monitor chrome begins its 320ms entrance 420ms into the reframe. This preserves one canvas and restores normal Globe HUD/controls at completion. Typecheck/lint pass; browser route handoff verified.
+
 **Completion criteria:**
 - [ ] Every screen above demoable against mock data before being wired live
 - [ ] All screens wired to live events by end of Phase 2

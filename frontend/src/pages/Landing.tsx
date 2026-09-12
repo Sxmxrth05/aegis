@@ -1,9 +1,8 @@
 import { animate, stagger } from 'animejs';
 import { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Globe } from '../components/globe/Globe';
-import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
-import { useNegotiationStore } from '../store/useNegotiationStore';
+import { useGlobeStage } from '../components/globe/GlobeStage';
 
 /* -- cards data ------------------------------------------- */
 const CARDS = [
@@ -38,9 +37,7 @@ function Badge({ label, tone }: { label: string; tone: Tone }) {
 }
 
 export default function Landing() {
-  const liveTrackedObjects = useNegotiationStore((state) => state.trackedObjects);
-  const activeConjunctionAlert = useNegotiationStore((state) => state.activeConjunctionAlert);
-  const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
+  const { setGlobeStage, navigateToMonitor, phase } = useGlobeStage();
 
   /* ── animation refs ── */
   const heroStatusRef  = useRef<HTMLDivElement>(null);
@@ -87,6 +84,10 @@ export default function Landing() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    setGlobeStage({ mode: 'hero' });
+  }, [setGlobeStage]);
 
   /* ── scroll-triggered stagger for bottom cards ── */
   useEffect(() => {
@@ -139,21 +140,13 @@ export default function Landing() {
   }, []);
 
   return (
-    <main className="ops-grid min-h-screen bg-background text-text-primary">
+    <main className="ops-grid min-h-screen text-text-primary overflow-x-hidden">
 
       {/* ── HERO ──────────────────────────────────────── */}
       <section
         className="relative border-b border-border overflow-hidden"
         style={{ minHeight: 'clamp(560px,82vh,860px)' }}
       >
-        {/* GLOBE — full-bleed behind the whole hero, same treatment as
-            Monitor's <div className="absolute inset-0"><Globe/></div>: one
-            shared page background, no separate boxed region or second
-            starfield confined to a sub-panel. */}
-        <div className="absolute inset-0" aria-hidden="true">
-          <Globe trackedObjects={trackedObjects} mode="landing" conjunctionAlert={activeConjunctionAlert ?? undefined} />
-        </div>
-
         {/* Readability gradient so the left-side copy stays legible over the
             full-bleed globe — same left-to-right treatment Monitor uses. */}
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,14,23,0.96)_0%,rgba(10,14,23,0.86)_32%,rgba(10,14,23,0.4)_50%,transparent_66%)]" />
@@ -174,9 +167,13 @@ export default function Landing() {
         <div className="scan-beam" aria-hidden="true" />
 
         {/* LEFT copy */}
-        <div
-          className="relative z-10 flex h-full max-w-full flex-col justify-center px-6 pt-16 pb-10 sm:px-10 lg:max-w-[50%] lg:px-14 lg:pt-20 lg:pb-14"
-          style={{ minHeight: 'inherit' }}
+        <motion.div
+          animate={phase === 'hero-exit' || phase === 'monitor-enter'
+            ? { opacity: 0, y: -12 }
+            : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 flex h-full flex-col justify-center px-6 pt-16 pb-10 sm:px-10 lg:px-14 lg:pt-20 lg:pb-14"
+          style={{ maxWidth: '50%', minHeight: 'inherit' }}
         >
           {/* status row */}
           <div
@@ -195,7 +192,7 @@ export default function Landing() {
           <h1
             ref={heroHeadRef}
             className="font-sans font-bold uppercase leading-[0.88] tracking-[-0.04em]"
-            style={{ fontSize: 'clamp(2.4rem,9vw,7.4rem)' }}
+            style={{ fontSize: 'clamp(3.2rem,8vw,7.4rem)' }}
           >
             <span className="block text-text-primary" style={{ opacity: 0 }}>Detect.</span>
             <span className="block text-text-primary" style={{ opacity: 0 }}>Negotiate.</span>
@@ -231,6 +228,10 @@ export default function Landing() {
 
             <Link
               to="/monitor"
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToMonitor();
+              }}
               className="flex items-center gap-2 bg-accent px-5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-white transition duration-200 hover:bg-accent-dark active:translate-y-px"
             >
               Open Monitor
@@ -246,7 +247,7 @@ export default function Landing() {
               View negotiation ledger +
             </Link>
           </div>
-        </div>
+        </motion.div>
 
       </section>
 

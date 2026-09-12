@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import ReactGlobe, { type GlobeMethods } from 'react-globe.gl';
 import { ACESFilmicToneMapping, AdditiveBlending, AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group, Mesh, MeshPhongMaterial, Points, PointsMaterial, ShaderMaterial, SphereGeometry, Vector2 } from 'three';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -10,7 +11,14 @@ import { positionKmToGeo } from './eciToGeo';
 import { GlobeHud } from './GlobeHud';
 import type { ConjunctionAlert, ManeuverTrajectoryResult, TrackedObject } from './types';
 
-export type GlobeMode = 'live' | 'conjunction' | 'trajectory' | 'landing';
+export type GlobeMode = 'live' | 'conjunction' | 'trajectory' | 'landing' | 'transition';
+
+export type GlobeHandle = {
+  pointOfView: (
+    target: { lat?: number; lng?: number; altitude?: number },
+    transitionMs?: number,
+  ) => void;
+};
 
 type Props = {
   trackedObjects: TrackedObject[];
@@ -191,11 +199,20 @@ function disposeObject(object: Group | Mesh) {
   });
 }
 
-export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult, className = '' }: Props) {
+export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
+  { trackedObjects, mode, conjunctionAlert, trajectoryResult, className = '' },
+  ref,
+) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  const prefersReducedMotion = useReducedMotion();
+  const requestedPointOfView = useRef<{
+    target: { lat?: number; lng?: number; altitude?: number };
+    transitionMs: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const bloomRef = useRef<UnrealBloomPass | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [isGlobeReady, setIsGlobeReady] = useState(false);
   const [hudMarkers, setHudMarkers] = useState<HudCluster[]>([]);
   const globeMaterial = useMemo(() => new MeshPhongMaterial({
     color: '#bfd6f5',
@@ -204,6 +221,13 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     specular: '#42689a',
     shininess: 9,
     bumpScale: 0.72,
+  }), []);
+
+  useImperativeHandle(ref, () => ({
+    pointOfView: (target, transitionMs = 0) => {
+      requestedPointOfView.current = { target, transitionMs };
+      globeRef.current?.pointOfView(target, transitionMs);
+    },
   }), []);
 
   useEffect(() => {
@@ -259,7 +283,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
 
   // Landing's hero copy sits on the left of the (full-bleed) panel, so the
   // globe itself is shifted right within that same panel to stop it
-  // overlapping the text — nothing else (panel, brackets, starfield) moves.
+  // overlapping the text — nothing else (panel, starfield) moves.
   // Applied as a plain screen-space offset, kept in sync between the visual
   // canvas transform below and the HUD label coordinates here so dots and
   // labels stay aligned.
@@ -316,20 +340,30 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     }
     bloomRef.current.setSize(size.width || 1, size.height || 1);
 
-    // 'landing' is an ambient, non-interactive hero backdrop (no zoom/pan,
-    // gentle auto-rotate, fixed initial framing) — every other mode keeps
-    // react-globe.gl's default interactive orbit controls untouched.
-    if (mode === 'landing') {
-      const controls = globe.controls();
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.28;
-      controls.enableZoom = false;
-      controls.enablePan = false;
-      globe.pointOfView({ lat: 20, lng: 10, altitude: 2.1 }, 0);
-    }
+    const requestedView = requestedPointOfView.current;
+    if (requestedView) globe.pointOfView(requestedView.target, requestedView.transitionMs);
 
     updateHud();
-  }, [size, updateHud, mode]);
+  }, [size, updateHud]);
+
+  const handleGlobeReady = useCallback(() => {
+    configureScene();
+    setIsGlobeReady(true);
+  }, [configureScene]);
+
+  // Landing is an ambient background. The persistent globe must restore
+  // controls when its same canvas becomes the interactive Monitor surface.
+  useEffect(() => {
+    if (!isGlobeReady) return;
+    const globe = globeRef.current;
+    if (!globe) return;
+    const controls = globe.controls();
+    const isAmbient = mode === 'landing' || mode === 'transition';
+    controls.autoRotate = mode === 'landing';
+    controls.autoRotateSpeed = mode === 'landing' ? 0.28 : 0;
+    controls.enableZoom = !isAmbient;
+    controls.enablePan = !isAmbient;
+  }, [isGlobeReady, mode]);
 
   useEffect(() => {
     const timer = window.setInterval(updateHud, 280);
@@ -356,15 +390,20 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
   return (
     <div ref={containerRef} className={`relative h-full w-full overflow-hidden ${className}`}>
       <div className="globe-star-dust" aria-hidden="true" />
-      <div
+      <motion.div
         className="h-full w-full"
-        style={landingXOffset ? { transform: `translateX(${landingXOffset}px)` } : undefined}
+        initial={false}
+        animate={{ x: landingXOffset }}
+        transition={{
+          duration: prefersReducedMotion ? 0 : mode === 'transition' ? 0.82 : 0.28,
+          ease: [0.22, 1, 0.36, 1],
+        }}
       >
       <ReactGlobe
         ref={globeRef}
         width={size.width || undefined}
         height={size.height || undefined}
-        onGlobeReady={configureScene}
+        onGlobeReady={handleGlobeReady}
         globeImageUrl={earthNightTexture}
         bumpImageUrl={earthBumpTexture}
         globeMaterial={globeMaterial}
@@ -413,18 +452,20 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
         pathDashGap={0.05}
         pathDashAnimateTime={3000}
       />
-      </div>
-      <GlobeHud
-        markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged, count, members }) => ({
-          noradId: norad_id,
-          name,
-          x,
-          y,
-          flagged: isFlagged,
-          count,
-          members: members.map((m) => ({ noradId: m.norad_id, name: m.name })),
-        }))}
-      />
+      </motion.div>
+      {mode !== 'transition' && (
+        <GlobeHud
+          markers={hudMarkers.map(({ norad_id, name, x, y, isFlagged, count, members }) => ({
+            noradId: norad_id,
+            name,
+            x,
+            y,
+            flagged: isFlagged,
+            count,
+            members: members.map((m) => ({ noradId: m.norad_id, name: m.name })),
+          }))}
+        />
+      )}
     </div>
   );
-}
+});
