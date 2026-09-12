@@ -48,6 +48,31 @@ export default function Landing() {
         className="relative border-b border-border overflow-hidden"
         style={{ minHeight: 'clamp(560px,82vh,860px)' }}
       >
+        {/* GLOBE — full-bleed behind the whole hero, same treatment as
+            Monitor's <div className="absolute inset-0"><Globe/></div>: one
+            shared page background, no separate boxed region or second
+            starfield confined to a sub-panel. */}
+        <div className="absolute inset-0" aria-hidden="true">
+          <Globe trackedObjects={trackedObjects} mode="landing" conjunctionAlert={activeConjunctionAlert ?? undefined} />
+        </div>
+
+        {/* Readability gradient so the left-side copy stays legible over the
+            full-bleed globe — same left-to-right treatment Monitor uses. */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,14,23,0.96)_0%,rgba(10,14,23,0.86)_32%,rgba(10,14,23,0.4)_50%,transparent_66%)]" />
+
+        {/* HUD label overlay */}
+        <div
+          className="pointer-events-none absolute z-10 font-mono text-[9px] uppercase tracking-widest"
+          style={{ top: '18%', right: '6%' }}
+        >
+          <div className="border border-border-light bg-surface/80 px-2.5 py-1.5 backdrop-blur-sm">
+            <div className="text-text-muted">Target</div>
+            <div className="mt-0.5 font-semibold text-text-primary">ISS / CSS</div>
+            <div className="text-danger-light">Miss: 3.202 km</div>
+          </div>
+          <div className="mt-1 ml-auto h-px w-10 bg-border-light" />
+        </div>
+
         <div className="scan-beam" aria-hidden="true" />
 
         {/* LEFT copy */}
@@ -116,27 +141,6 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* GLOBE — full right half, absolute positioned */}
-        <div
-          className="absolute right-0 top-0 bottom-0"
-          style={{ left: '46%' }}
-          aria-hidden="true"
-        >
-          {/* HUD label overlay */}
-          <div
-            className="absolute z-10 font-mono text-[9px] uppercase tracking-widest pointer-events-none"
-            style={{ top: '18%', right: '6%' }}
-          >
-            <div className="border border-border-light bg-surface/80 px-2.5 py-1.5 backdrop-blur-sm">
-              <div className="text-text-muted">Target</div>
-              <div className="mt-0.5 font-semibold text-text-primary">ISS / CSS</div>
-              <div className="text-danger-light">Miss: 3.202 km</div>
-            </div>
-            <div className="mt-1 ml-auto h-px w-10 bg-border-light" />
-          </div>
-
-          <Globe trackedObjects={trackedObjects} mode="landing" conjunctionAlert={activeConjunctionAlert ?? undefined} />
-        </div>
       </section>
 
       {/* ── BOTTOM CARDS ──────────────────────────────── */}
