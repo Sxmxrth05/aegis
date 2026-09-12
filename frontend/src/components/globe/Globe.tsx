@@ -10,7 +10,7 @@ import { positionKmToGeo } from './eciToGeo';
 import { GlobeHud } from './GlobeHud';
 import type { ConjunctionAlert, ManeuverTrajectoryResult, TrackedObject } from './types';
 
-export type GlobeMode = 'live' | 'conjunction' | 'trajectory';
+export type GlobeMode = 'live' | 'conjunction' | 'trajectory' | 'landing';
 
 type Props = {
   trackedObjects: TrackedObject[];
@@ -80,6 +80,23 @@ function clusterHudPoints(screenPoints: ScreenPoint[]): HudCluster[] {
       });
     } else {
       clusters.push({ ...point, count: 1, members: [point] });
+    }
+  }
+
+  // Pass 3: final de-collision. Two markers can still end up screen-adjacent
+  // purely from the current camera angle/rotation — e.g. ISS COMPLEX and CSS
+  // CLUSTER are physically unrelated but can project close together — which
+  // isn't caught by passes 1-2 (those only merge points that are the SAME
+  // underlying location). Nudge later markers down until their label text no
+  // longer collides with an earlier one's.
+  const LABEL_COLLISION_PX = 22;
+  for (let i = 1; i < clusters.length; i += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const collides = clusters
+        .slice(0, i)
+        .some((other) => Math.hypot(clusters[i].x - other.x, clusters[i].y - other.y) < LABEL_COLLISION_PX);
+      if (!collides) break;
+      clusters[i] = { ...clusters[i], y: clusters[i].y + LABEL_COLLISION_PX };
     }
   }
 
@@ -215,7 +232,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
     endAlt: point.alt,
   })), [points]);
 
-  const rings = useMemo(() => mode === 'conjunction' && conjunctionAlert ? points.filter((point) => point.isFlagged) : [], [mode, conjunctionAlert, points]);
+  const rings = useMemo(() => (mode === 'conjunction' || mode === 'landing') && conjunctionAlert ? points.filter((point) => point.isFlagged) : [], [mode, conjunctionAlert, points]);
 
   const pathsData = useMemo(() => {
     if (mode !== 'trajectory' || !trajectoryResult) return [];
@@ -277,8 +294,21 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
       composer.addPass(bloomRef.current);
     }
     bloomRef.current.setSize(size.width || 1, size.height || 1);
+
+    // 'landing' is an ambient, non-interactive hero backdrop (no zoom/pan,
+    // gentle auto-rotate, fixed initial framing) — every other mode keeps
+    // react-globe.gl's default interactive orbit controls untouched.
+    if (mode === 'landing') {
+      const controls = globe.controls();
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.28;
+      controls.enableZoom = false;
+      controls.enablePan = false;
+      globe.pointOfView({ lat: 20, lng: 10, altitude: 2.1 }, 0);
+    }
+
     updateHud();
-  }, [size, updateHud]);
+  }, [size, updateHud, mode]);
 
   useEffect(() => {
     const timer = window.setInterval(updateHud, 280);
@@ -323,7 +353,7 @@ export function Globe({ trackedObjects, mode, conjunctionAlert, trajectoryResult
         pointRadius={(point) => ((point as GlobePoint).isFlagged ? 0.72 : 0.42)}
         pointResolution={32}
         pointLabel={(point) => `${(point as GlobePoint).name} (${(point as GlobePoint).norad_id})`}
-        arcsData={mode === 'live' || mode === 'conjunction' ? trails : []}
+        arcsData={mode === 'live' || mode === 'conjunction' || mode === 'landing' ? trails : []}
         arcStartLat="lat"
         arcStartLng="lng"
         arcStartAltitude="alt"

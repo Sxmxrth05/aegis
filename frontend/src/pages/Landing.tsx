@@ -1,5 +1,7 @@
 ﻿import { Link } from 'react-router-dom';
-import { LandingGlobe } from '../components/globe/LandingGlobe';
+import { Globe } from '../components/globe/Globe';
+import { MOCK_TRACKED_OBJECTS } from '../components/globe/mockTrackedObjects';
+import { useNegotiationStore } from '../store/useNegotiationStore';
 
 /* -- cards data ------------------------------------------- */
 const CARDS = [
@@ -34,6 +36,10 @@ function Badge({ label, tone }: { label: string; tone: Tone }) {
 }
 
 export default function Landing() {
+  const liveTrackedObjects = useNegotiationStore((state) => state.trackedObjects);
+  const activeConjunctionAlert = useNegotiationStore((state) => state.activeConjunctionAlert);
+  const trackedObjects = liveTrackedObjects.length > 0 ? liveTrackedObjects : MOCK_TRACKED_OBJECTS;
+
   return (
     <main className="ops-grid min-h-screen bg-background text-text-primary overflow-x-hidden">
 
@@ -129,7 +135,7 @@ export default function Landing() {
             <div className="mt-1 ml-auto h-px w-10 bg-border-light" />
           </div>
 
-          <LandingGlobe />
+          <Globe trackedObjects={trackedObjects} mode="landing" conjunctionAlert={activeConjunctionAlert ?? undefined} />
         </div>
       </section>
 
