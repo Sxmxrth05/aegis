@@ -13,6 +13,13 @@ export type TrackedObject = {
   velocity_kmps: [number, number, number];
 };
 
+export type OperatorProfile = {
+  operator_name: string;
+  fuel_margin_pct: number;
+  mvi: number;
+  delta_v_mps: number;
+};
+
 export type ConjunctionStatus =
   | 'alerted'
   | 'negotiating'

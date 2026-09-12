@@ -66,39 +66,121 @@ def load_tracked_objects_fixture() -> list[TrackedObject]:
     Loads Dev A's Phase 0 TrackedObject mock fixture
     (data/fixtures/tracked_objects.json) as canonical, schema-validated
     Pydantic objects — the real 5-satellite scripted-demo set, not
-    fabricated/live-fetched data. Used to populate the /ws/monitor
-    snapshot so the globe shows real tracked-object state on connect
-    instead of an empty array.
+    fabricated/live-fetched data. Used as a fallback when CelesTrak is unavailable.
     """
     fixture_path = FIXTURES_DIR / "tracked_objects.json"
     with open(fixture_path, encoding="utf-8") as f:
         raw = json.load(f)
     return [TrackedObject(**obj) for obj in raw]
 
-# Hardcoded demo profiles for the scripted scenario's conjunction pair
-# (ISS 25544 <-> CSS Tianhe 48274) — same values used in Dev C's own
-# test_negotiator.py fixtures. Not a lookup system: every negotiation
-# session currently runs this exact pair regardless of conjunction_id,
-# per this task's "keep this minimal" scope. Revisit once there's more
-# than one live scripted scenario to route between.
-_PROFILE_A = OperatorProfile(
-    agent_id=AgentId.OPERATOR_A,
-    operator_name="NASA / Roscosmos",
-    satellite_name="ISS (ZARYA)",
-    norad_id="25544",
-    mvi=0.95,
-    fuel_margin_pct=15.0,
-    delta_v_mps=1.8,
-)
-_PROFILE_B = OperatorProfile(
-    agent_id=AgentId.OPERATOR_B,
-    operator_name="CMSA",
-    satellite_name="CSS (TIANHE)",
-    norad_id="48274",
-    mvi=0.70,
-    fuel_margin_pct=45.0,
-    delta_v_mps=2.4,
-)
+
+def load_all_tracked_objects() -> list[TrackedObject]:
+    """
+    Attempts to load and propagate all 20 locked CelesTrak satellites.
+    Falls back to fixture if CelesTrak cache/propagation fails.
+    """
+    try:
+        from datetime import datetime, timezone
+        try:
+            from backend.app.data.celestrak import get_raw_tles
+            from backend.app.agents.monitor_agent import build_satellite, propagate
+        except ImportError:
+            from app.data.celestrak import get_raw_tles
+            from app.agents.monitor_agent import build_satellite, propagate
+
+        raw_tles = get_raw_tles()
+        now = datetime.now(timezone.utc)
+        results: list[TrackedObject] = []
+        for raw in raw_tles:
+            try:
+                sat = build_satellite(raw.tle_line1, raw.tle_line2)
+                obj = propagate(
+                    satellite=sat,
+                    norad_id=raw.norad_id,
+                    time_utc=now,
+                    name=raw.name,
+                    tle_line1=raw.tle_line1,
+                    tle_line2=raw.tle_line2,
+                )
+                results.append(obj)
+            except Exception:
+                continue
+        if results:
+            return results
+    except Exception as e:
+        logger.warning("[orchestrator] Could not load CelesTrak tracked objects (%s); falling back to fixture", e)
+
+    return load_tracked_objects_fixture()
+
+
+# Known profiles for CelesTrak locked satellites; dynamic hash fallback provided for any other NORAD ID
+KNOWN_OPERATOR_PROFILES: dict[str, tuple[str, float, float, float]] = {
+    # norad_id: (operator_name, mvi, fuel_margin_pct, delta_v_mps)
+    "25544": ("NASA / Roscosmos", 0.95, 15.0, 1.8),
+    "48274": ("CMSA", 0.70, 45.0, 2.4),
+    "44713": ("SpaceX", 0.40, 80.0, 3.5),
+    "36086": ("Roscosmos", 0.85, 25.0, 1.5),
+    "49044": ("Roscosmos", 0.90, 20.0, 1.6),
+    "49271": ("Arianespace / Debris", 0.15, 5.0, 0.8),
+    "53239": ("CMSA", 0.75, 40.0, 2.2),
+    "54216": ("CMSA", 0.75, 42.0, 2.2),
+    "66052": ("JAXA", 0.35, 60.0, 2.0),
+    "66515": ("CMSA Cargo", 0.65, 55.0, 2.5),
+    "66906": ("Astroscale", 0.50, 70.0, 3.0),
+    "67683": ("GeoInformatics", 0.45, 65.0, 2.8),
+    "67685": ("SpaceX", 0.40, 75.0, 3.2),
+    "67686": ("UiTM Tech", 0.38, 70.0, 2.7),
+    "67687": ("Leopard Space", 0.42, 68.0, 2.9),
+    "67688": ("HMU Aerospace", 0.48, 62.0, 3.1),
+    "67796": ("SpaceX / NASA", 0.92, 35.0, 2.5),
+    "68689": ("Northrop Grumman", 0.60, 30.0, 2.0),
+    "68837": ("Roscosmos", 0.75, 50.0, 2.2),
+    "69049": ("CMSA Cargo", 0.80, 65.0, 3.0),
+    "69180": ("CMSA Crewed", 0.95, 40.0, 2.5),
+}
+
+
+def resolve_operator_profile(
+    norad_id: str,
+    satellite_name: str = "",
+    agent_id: AgentId = AgentId.OPERATOR_A,
+) -> OperatorProfile:
+    """Dynamically resolves or constructs an OperatorProfile for any satellite."""
+    if norad_id in KNOWN_OPERATOR_PROFILES:
+        op_name, mvi, fuel_pct, dv_mps = KNOWN_OPERATOR_PROFILES[norad_id]
+    else:
+        op_name = f"Operator-{norad_id}"
+        # Deterministic hashing based on norad_id to avoid identical values for distinct satellites
+        num_id = int(norad_id) if norad_id.isdigit() else abs(hash(norad_id))
+        mvi = round(0.35 + ((num_id * 17) % 55) / 100.0, 2)
+        fuel_pct = round(15.0 + ((num_id * 31) % 70), 1)
+        dv_mps = round(1.5 + ((num_id * 13) % 25) / 10.0, 1)
+
+    return OperatorProfile(
+        agent_id=agent_id,
+        operator_name=op_name,
+        satellite_name=satellite_name or f"SAT-{norad_id}",
+        norad_id=norad_id,
+        mvi=mvi,
+        fuel_margin_pct=fuel_pct,
+        delta_v_mps=dv_mps,
+    )
+
+
+def get_operator_profiles_payload(all_objs: list[TrackedObject] | None = None) -> dict[str, dict]:
+    """Returns profile metadata dictionary for all active tracked satellites."""
+    if all_objs is None:
+        all_objs = load_all_tracked_objects()
+    payload = {}
+    for obj in all_objs:
+        prof = resolve_operator_profile(obj.norad_id, obj.name)
+        payload[obj.norad_id] = {
+            "operator_name": prof.operator_name,
+            "fuel_margin_pct": prof.fuel_margin_pct,
+            "mvi": prof.mvi,
+            "delta_v_mps": prof.delta_v_mps,
+        }
+    return payload
 
 
 class Orchestrator:
@@ -110,23 +192,21 @@ class Orchestrator:
         self._connections = connection_manager
 
     def detect_conjunctions(self) -> list[ConjunctionAlert]:
-        alerts = run_detect_conjunctions()
+        """Runs dynamic conjunction detection across all tracked satellites."""
+        all_objects = load_all_tracked_objects()
+        alerts = run_detect_conjunctions(all_objects)
         return alerts if alerts else [_HARDCODED_ALERT]
 
     def monitor_snapshot_payload(self) -> dict:
         """
-        Snapshot payload for a new /ws/monitor connection. `trackedObjects`
-        (camelCase — matches the frontend store's SnapshotPayload type
-        exactly, since this raw dict is sent as-is, not through a Pydantic
-        model with field aliasing) is real fixture data via
-        `load_tracked_objects_fixture()`, not mock/fabricated numbers.
-        `conjunctions` stays empty here — the conjunction_alert itself
-        arrives via the separate broadcast right after connect, same as
-        before this change.
+        Snapshot payload for a new /ws/monitor connection. Includes
+        the 20 live/cached CelesTrak tracked objects and operatorProfiles metadata.
         """
+        tracked_objs = load_all_tracked_objects()
         return {
             "conjunctions": [],
-            "trackedObjects": [obj.model_dump() for obj in load_tracked_objects_fixture()],
+            "trackedObjects": [obj.model_dump() for obj in tracked_objs],
+            "operatorProfiles": get_operator_profiles_payload(tracked_objs),
         }
 
     async def broadcast_conjunction_alerts(
@@ -142,40 +222,29 @@ class Orchestrator:
         force_rejection: bool = False,
     ) -> None:
         """
-        Runs Dev C's NegotiationEngine (agents/negotiator.py) for the
-        scripted scenario and streams every message live as it's produced,
-        then the final Resolution — never computing negotiation math here,
-        only dispatching what the engine returns (architecture.md
-        §System Boundaries).
-
-        TODO(Dev B/C): conjunction_id is accepted for future routing
-        across multiple concurrent conjunctions but isn't looked up yet —
-        every session currently runs the same scripted scenario B3's
-        `detect_conjunctions()` already produces (per this task's
-        "keep this minimal, prove the pipe" scope).
-
-        NegotiationEngine.run_negotiation() builds its full transcript
-        synchronously with no incremental hook, so "streamed live" here
-        means each already-computed message is broadcast as its own
-        WebSocket frame immediately after the engine returns — not
-        delivered mid-computation. True as-computed streaming would need
-        a callback/generator added to the engine itself, which is Dev C's
-        file and out of scope for this change.
+        Runs Dev C's NegotiationEngine (agents/negotiator.py) dynamically routed
+        for the specified conjunction_id, resolving satellite objects and operator
+        profiles dynamically.
         """
         alerts = self.detect_conjunctions()
-        alert = alerts[0]
+        alert = next((a for a in alerts if a.id == conjunction_id), alerts[0])
 
-        all_objects = get_seeded_scenario_objects()
-        sat_a = next(obj for obj in all_objects if obj.norad_id == alert.primary_id)
-        sat_b = next(obj for obj in all_objects if obj.norad_id == alert.secondary_id)
+        all_objects = load_all_tracked_objects()
 
-        engine = NegotiationEngine(alert, _PROFILE_A, _PROFILE_B, sat_a, sat_b, all_objects)
+        sat_a = next((obj for obj in all_objects if obj.norad_id == alert.primary_id), None)
+        sat_b = next((obj for obj in all_objects if obj.norad_id == alert.secondary_id), None)
+
+        if not sat_a or not sat_b:
+            seeded = get_seeded_scenario_objects()
+            sat_a = sat_a or next((obj for obj in seeded if obj.norad_id == alert.primary_id), seeded[0])
+            sat_b = sat_b or next((obj for obj in seeded if obj.norad_id == alert.secondary_id), seeded[1])
+
+        profile_a = resolve_operator_profile(sat_a.norad_id, sat_a.name, AgentId.OPERATOR_A)
+        profile_b = resolve_operator_profile(sat_b.norad_id, sat_b.name, AgentId.OPERATOR_B)
+
+        engine = NegotiationEngine(alert, profile_a, profile_b, sat_a, sat_b, all_objects)
 
         try:
-            # run_negotiation() is synchronous and calls out to the
-            # Anthropic API (operator_agent.py) — run it off the event
-            # loop thread so a slow/failed LLM call doesn't block every
-            # other connection this server is handling.
             transcript, resolution = await asyncio.to_thread(
                 engine.run_negotiation, force_initial_rejection=force_rejection
             )

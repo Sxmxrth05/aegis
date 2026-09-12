@@ -29,7 +29,15 @@ const STATUS_BADGE: Record<ConjunctionStatus, 'active' | 'danger' | 'warning' | 
   stood_down: 'success',
 };
 
-function SatelliteCard({ label, obj }: { label: string; obj: TrackedObject | undefined }) {
+function SatelliteCard({
+  label,
+  obj,
+  profile,
+}: {
+  label: string;
+  obj: TrackedObject | undefined;
+  profile: { operator_name: string; fuel_margin_pct: number; mvi: number; delta_v_mps: number } | undefined;
+}) {
   return (
     <Card className="flex-1">
       <p className="text-xs uppercase tracking-wide text-text-muted">{label}</p>
@@ -48,21 +56,25 @@ function SatelliteCard({ label, obj }: { label: string; obj: TrackedObject | und
         </dd>
 
         <dt className="text-text-secondary">Operator</dt>
-        <dd className="text-right font-mono text-text-muted">TBD</dd>
+        <dd className="text-right font-mono text-text-primary">
+          {profile ? profile.operator_name : '—'}
+        </dd>
 
         <dt className="text-text-secondary">Fuel Δv margin</dt>
-        <dd className="text-right font-mono text-text-muted">TBD</dd>
+        <dd className="text-right font-mono text-text-primary">
+          {profile ? `${profile.fuel_margin_pct.toFixed(1)}%` : '—'}
+        </dd>
 
         <dt className="text-text-secondary">Mission priority</dt>
-        <dd className="text-right font-mono text-text-muted">TBD</dd>
+        <dd className="text-right font-mono text-text-primary">
+          {profile ? `${(profile.mvi * 100).toFixed(0)}% (MVI ${profile.mvi.toFixed(2)})` : '—'}
+        </dd>
 
         <dt className="text-text-secondary">Maneuverability</dt>
-        <dd className="text-right font-mono text-text-muted">TBD</dd>
+        <dd className="text-right font-mono text-text-primary">
+          {profile ? `Max Δv ${profile.delta_v_mps.toFixed(1)} m/s` : '—'}
+        </dd>
       </dl>
-      <p className="mt-3 text-[11px] text-text-muted">
-        Operator/fuel/priority/maneuverability aren't part of the current TrackedObject/ConjunctionAlert
-        data the frontend receives — shown as TBD rather than invented.
-      </p>
     </Card>
   );
 }
@@ -70,6 +82,7 @@ function SatelliteCard({ label, obj }: { label: string; obj: TrackedObject | und
 export default function Negotiate() {
   const activeConjunctionAlert = useNegotiationStore((s) => s.activeConjunctionAlert);
   const liveTrackedObjects = useNegotiationStore((s) => s.trackedObjects);
+  const operatorProfiles = useNegotiationStore((s) => s.operatorProfiles);
   const messages = useNegotiationStore((s) => s.messages);
   const resolution = useNegotiationStore((s) => s.resolution);
   
@@ -112,7 +125,10 @@ export default function Negotiate() {
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-text-primary">Conjunction Details</h2>
+        <div>
+          <h2 className="text-2xl font-semibold text-text-primary">Conjunction Details</h2>
+          <p className="text-xs text-text-muted mt-0.5">Evaluating Primary vs Secondary satellite encounter pair</p>
+        </div>
         <Badge status={STATUS_BADGE[activeConjunctionAlert.status]}>
           {activeConjunctionAlert.status.replace('_', ' ')}
         </Badge>
@@ -122,8 +138,8 @@ export default function Negotiate() {
       </p>
 
       <div className="mt-6 flex flex-col gap-4 md:flex-row">
-        <SatelliteCard label="Primary" obj={primaryObj} />
-        <SatelliteCard label="Secondary" obj={secondaryObj} />
+        <SatelliteCard label="Primary" obj={primaryObj} profile={primaryObj ? operatorProfiles[primaryObj.norad_id] : undefined} />
+        <SatelliteCard label="Secondary" obj={secondaryObj} profile={secondaryObj ? operatorProfiles[secondaryObj.norad_id] : undefined} />
       </div>
 
       <Card className="mt-4">

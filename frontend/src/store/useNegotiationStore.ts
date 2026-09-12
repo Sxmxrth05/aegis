@@ -4,6 +4,7 @@ import type {
   TrackedObject,
   NegotiationMessage,
   Resolution,
+  OperatorProfile,
 } from '../components/globe/types';
 
 /**
@@ -34,17 +35,19 @@ type SnapshotPayload = {
   conjunctions?: ConjunctionAlert[];
   messages?: NegotiationMessage[];
   resolution?: Resolution | null;
+  operatorProfiles?: Record<string, OperatorProfile>;
 };
 
 type NegotiationState = {
   trackedObjects: TrackedObject[];
   activeConjunctionAlert: ConjunctionAlert | null;
   connectionStatus: ConnectionStatus;
-  
+  operatorProfiles: Record<string, OperatorProfile>;
+
   // Phase 2 fields
   messages: NegotiationMessage[];
   resolution: Resolution | null;
-  
+
   setConnectionStatus: (status: ConnectionStatus) => void;
   /**
    * The single funnel for all WebSocket message handling, per
@@ -58,6 +61,7 @@ export const useNegotiationStore = create<NegotiationState>((set) => ({
   trackedObjects: [],
   activeConjunctionAlert: null,
   connectionStatus: 'connecting',
+  operatorProfiles: {},
   messages: [],
   resolution: null,
 
@@ -76,6 +80,7 @@ export const useNegotiationStore = create<NegotiationState>((set) => ({
           activeConjunctionAlert: payload.conjunctions !== undefined ? (payload.conjunctions[0] ?? null) : state.activeConjunctionAlert,
           messages: payload.messages !== undefined ? payload.messages : state.messages,
           resolution: payload.resolution !== undefined ? payload.resolution : state.resolution,
+          operatorProfiles: payload.operatorProfiles !== undefined ? payload.operatorProfiles : state.operatorProfiles,
         }));
         break;
       }

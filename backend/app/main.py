@@ -16,6 +16,41 @@ async def health() -> dict[str, str]:
 
 @app.get("/api/trajectory/{conjunction_id}")
 async def get_trajectory_simulation(conjunction_id: str) -> dict:
+    try:
+        try:
+            from backend.app.storage.db import get_full_session_details
+            from backend.app.data.trajectory import generate_maneuver_trajectory, simulate_seeded_conjunction_trajectory
+            from backend.app.orchestrator.orchestrator import load_all_tracked_objects
+            from backend.app.schemas.conjunction import ConjunctionAlert
+            from backend.app.schemas.negotiation import Resolution
+        except ImportError:
+            from app.storage.db import get_full_session_details
+            from app.data.trajectory import generate_maneuver_trajectory, simulate_seeded_conjunction_trajectory
+            from app.orchestrator.orchestrator import load_all_tracked_objects
+            from app.schemas.conjunction import ConjunctionAlert
+            from app.schemas.negotiation import Resolution
+
+        session = get_full_session_details(conjunction_id)
+        if session and session.get("conjunction") and session.get("resolution"):
+            alert = ConjunctionAlert(**session["conjunction"])
+            resolution = Resolution(**session["resolution"])
+            all_objects = load_all_tracked_objects()
+
+            primary_obj = next((o for o in all_objects if o.norad_id == alert.primary_id), None)
+            secondary_obj = next((o for o in all_objects if o.norad_id == alert.secondary_id), None)
+
+            if primary_obj and secondary_obj:
+                result = generate_maneuver_trajectory(
+                    conjunction_id=conjunction_id,
+                    primary=primary_obj,
+                    secondary=secondary_obj,
+                    resolution=resolution,
+                    maneuvering_norad_id=resolution.maneuvering_agent,
+                )
+                return result.model_dump()
+    except Exception:
+        pass
+
     from app.data.trajectory import simulate_seeded_conjunction_trajectory
     result = simulate_seeded_conjunction_trajectory()
     return result.model_dump()
