@@ -1,37 +1,49 @@
 """
 A2 — SGP4 propagation.
 
-Owner: Dev A (Orbital Physics & Conjunction Detection)
+Owner: Dev A (Orbital Physics & Conjunction Detection) / Dev C (coverage fixes)
 
 This module is the ONE place in the whole system that runs SGP4. Dev C's
 validation_agent.py reuses propagate()/propagate_window() directly rather
 than reimplementing propagation — per the build plan's stated interface
 reuse.
 
-No I/O here: this module only does math. It takes TrackedObject-shaped
-data in (from data/celestrak.py) and returns plain Python data out.
+Takes raw TLE data in (from data/celestrak.py) and produces canonical
+Pydantic TrackedObject instances (from schemas.tracked_object) out.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from typing import Iterable, Any
 
 from sgp4.api import Satrec, SGP4_ERRORS, jday
+
+try:
+    from backend.app.schemas.tracked_object import TrackedObject
+except ImportError:
+    try:
+        from app.schemas.tracked_object import TrackedObject
+    except ImportError:
+        # Fallback if schemas package not in PYTHONPATH
+        from pydantic import BaseModel, Field
+
+        class TrackedObject(BaseModel):  # type: ignore[no-redef]
+            norad_id: str
+            name: str
+            tle_line1: str
+            tle_line2: str
+            timestamp_utc: str
+            position_km: tuple[float, float, float]
+            velocity_kmps: tuple[float, float, float]
+
+
+# Backward compatibility alias
+StateVector = TrackedObject
 
 
 class PropagationError(Exception):
     """Raised when SGP4 returns a non-zero error code for a given time."""
-
-
-@dataclass(frozen=True)
-class StateVector:
-    """Position and velocity at one instant, in the TEME frame (per sgp4)."""
-    norad_id: str
-    time_utc: str          # ISO 8601
-    position_km: tuple[float, float, float]
-    velocity_kmps: tuple[float, float, float]
 
 
 def build_satellite(tle_line1: str, tle_line2: str) -> Satrec:
@@ -52,9 +64,17 @@ def _datetime_to_jd_fr(dt: datetime) -> tuple[float, float]:
     return jd, fr
 
 
-def propagate(satellite: Satrec, norad_id: str, time_utc: datetime) -> StateVector:
+def propagate(
+    satellite: Satrec,
+    norad_id: str,
+    time_utc: datetime,
+    name: str = "",
+    tle_line1: str = "",
+    tle_line2: str = "",
+) -> TrackedObject:
     """
-    Propagate a single satellite to a single instant.
+    Propagate a single satellite to a single instant and construct the
+    canonical Pydantic TrackedObject (with timestamp_utc, position_km, velocity_kmps).
     Raises PropagationError on any SGP4 error code (e.g. decayed orbit,
     invalid eccentricity) — callers must not silently trust a zero vector.
     """
@@ -67,11 +87,41 @@ def propagate(satellite: Satrec, norad_id: str, time_utc: datetime) -> StateVect
             f"{SGP4_ERRORS.get(error_code, 'unknown error')}"
         )
 
-    return StateVector(
+    return TrackedObject(
         norad_id=norad_id,
-        time_utc=time_utc.isoformat(),
+        name=name or f"OBJECT-{norad_id}",
+        tle_line1=tle_line1,
+        tle_line2=tle_line2,
+        timestamp_utc=time_utc.isoformat(),
         position_km=r,
         velocity_kmps=v,
+    )
+
+
+def propagate_raw_tle(raw: Any, time_utc: datetime) -> TrackedObject:
+    """
+    Convenience helper: propagate a raw TLE record (RawTLE dataclass or dict)
+    into the canonical Pydantic TrackedObject.
+    """
+    if isinstance(raw, dict):
+        norad_id = raw["norad_id"]
+        name = raw.get("name", f"OBJECT-{norad_id}")
+        tle_line1 = raw["tle_line1"]
+        tle_line2 = raw["tle_line2"]
+    else:
+        norad_id = raw.norad_id
+        name = raw.name
+        tle_line1 = raw.tle_line1
+        tle_line2 = raw.tle_line2
+
+    sat = build_satellite(tle_line1, tle_line2)
+    return propagate(
+        satellite=sat,
+        norad_id=norad_id,
+        time_utc=time_utc,
+        name=name,
+        tle_line1=tle_line1,
+        tle_line2=tle_line2,
     )
 
 
@@ -81,7 +131,10 @@ def propagate_window(
     start_utc: datetime,
     end_utc: datetime,
     step_seconds: int,
-) -> list[StateVector]:
+    name: str = "",
+    tle_line1: str = "",
+    tle_line2: str = "",
+) -> list[TrackedObject]:
     """
     Propagate a satellite across a time window at a fixed step.
     Skips (does not crash on) individual timesteps that error out, but
@@ -92,11 +145,20 @@ def propagate_window(
     if step_seconds <= 0:
         raise ValueError("step_seconds must be positive")
 
-    results: list[StateVector] = []
+    results: list[TrackedObject] = []
     t = start_utc
     while t <= end_utc:
         try:
-            results.append(propagate(satellite, norad_id, t))
+            results.append(
+                propagate(
+                    satellite=satellite,
+                    norad_id=norad_id,
+                    time_utc=t,
+                    name=name,
+                    tle_line1=tle_line1,
+                    tle_line2=tle_line2,
+                )
+            )
         except PropagationError:
             pass  # gap in coverage for this timestep; A3 handles sparse windows
         t += timedelta(seconds=step_seconds)
@@ -109,10 +171,10 @@ def propagate_many(
     start_utc: datetime,
     end_utc: datetime,
     step_seconds: int,
-) -> dict[str, list[StateVector]]:
+) -> dict[str, list[TrackedObject]]:
     """
     Convenience wrapper for A3: propagate a whole tracked-object set over
-    the same window in one call. Returns {norad_id: [StateVector, ...]}.
+    the same window in one call. Returns {norad_id: [TrackedObject, ...]}.
     """
     return {
         norad_id: propagate_window(sat, norad_id, start_utc, end_utc, step_seconds)
@@ -121,13 +183,11 @@ def propagate_many(
 
 
 if __name__ == "__main__":
-    # Quick manual smoke test using ISS's real TLE — not the validation
-    # test (see test_monitor_agent_validation.py for the accuracy check
-    # against a known reference position).
     s = "1 25544U 98067A   19343.69339541  .00001764  00000-0  38792-4 0  9991"
     t = "2 25544  51.6439 211.2001 0007417  17.6667  85.6398 15.50103472202482"
     sat = build_satellite(s, t)
     now = datetime(2019, 12, 9, 20, 42, 0, tzinfo=timezone.utc)
-    state = propagate(sat, "25544", now)
-    print(f"Position (km): {state.position_km}")
-    print(f"Velocity (km/s): {state.velocity_kmps}")
+    obj = propagate(sat, "25544", now, name="ISS (ZARYA)", tle_line1=s, tle_line2=t)
+    print(f"Propagated TrackedObject:\n  {obj}")
+    print(f"Position (km): {obj.position_km}")
+    print(f"Velocity (km/s): {obj.velocity_kmps}")

@@ -1,7 +1,7 @@
 """
 A1 — CelesTrak TLE ingestion + local caching + fallback-to-cache-on-failure.
 
-Owner: Dev A (Orbital Physics & Conjunction Detection)
+Owner: Dev A (Orbital Physics & Conjunction Detection) / Dev C (coverage fixes)
 
 This module is the ONLY thing in the pipeline that talks to the network.
 Everything downstream (A2 propagation, A3 detection) reads from the cache
@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +60,19 @@ LOCKED_OBJECTS: dict[str, dict] = {
 
 
 @dataclass
-class TrackedObject:
+class RawTLE:
+    """Raw TLE record as fetched from CelesTrak.
+
+    Canonical Pydantic TrackedObject (with position_km and velocity_kmps)
+    is constructed downstream by monitor_agent.py after propagation.
+    """
     norad_id: str
     name: str
     tle_line1: str
     tle_line2: str
-    epoch_utc: str
-    is_active: bool
-    fetched_at_utc: str
+    epoch_utc: str = ""
+    is_active: bool = True
+    fetched_at_utc: str = ""
     is_stale: bool = False
 
     def to_dict(self) -> dict:
@@ -79,25 +84,34 @@ class CelesTrakFetchError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Fetch
+# Fetch (using httpx async client per library-docs.md)
 # ---------------------------------------------------------------------------
+
+async def fetch_tle_group_async(url: str = CELESTRAK_URL) -> str:
+    """
+    Hit CelesTrak directly and return the raw TLE text using httpx.AsyncClient.
+    Raises httpx.HTTPError on network failures — callers should catch broadly
+    and fall back to cache.
+    """
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        resp = await client.get(url, headers={"User-Agent": USER_AGENT})
+        resp.raise_for_status()
+        if not resp.text.strip():
+            raise ValueError("CelesTrak returned an empty body")
+        return resp.text
+
 
 def fetch_tle_group(url: str = CELESTRAK_URL) -> str:
     """
-    Hit CelesTrak directly and return the raw TLE text.
-    Raises requests.RequestException (or subclass) on any network failure —
-    callers should catch broadly and fall back to cache, never let this
-    exception surface raw to the rest of the pipeline.
+    Synchronous fetch helper using httpx.Client.
+    Used by CLI scripts, offline tests, and sync callers.
     """
-    resp = requests.get(
-        url,
-        headers={"User-Agent": USER_AGENT},
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    resp.raise_for_status()
-    if not resp.text.strip():
-        raise ValueError("CelesTrak returned an empty body")
-    return resp.text
+    with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        resp = client.get(url, headers={"User-Agent": USER_AGENT})
+        resp.raise_for_status()
+        if not resp.text.strip():
+            raise ValueError("CelesTrak returned an empty body")
+        return resp.text
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +131,9 @@ def _parse_epoch(tle_line1: str) -> datetime:
     return jan1 + timedelta(days=day_frac - 1)
 
 
-def parse_tle_text(raw_text: str, fetched_at: datetime) -> list[TrackedObject]:
+def parse_tle_text(raw_text: str, fetched_at: datetime) -> list[RawTLE]:
     """
-    Parse CelesTrak's 3-line-per-object TLE text into TrackedObject records,
+    Parse CelesTrak's 3-line-per-object TLE text into RawTLE records,
     keeping only objects in LOCKED_OBJECTS. Logs (does not crash on) any
     locked object missing from the fetched group, and any unexpected object
     present in the group but not in our locked set.
@@ -133,7 +147,7 @@ def parse_tle_text(raw_text: str, fetched_at: datetime) -> list[TrackedObject]:
         )
 
     found_ids: set[str] = set()
-    results: list[TrackedObject] = []
+    results: list[RawTLE] = []
 
     for i in range(0, len(lines) - 2, 3):
         name_line, line1, line2 = lines[i], lines[i + 1], lines[i + 2]
@@ -158,7 +172,7 @@ def parse_tle_text(raw_text: str, fetched_at: datetime) -> list[TrackedObject]:
         is_stale = age_days > STALE_CUTOFF_DAYS
 
         results.append(
-            TrackedObject(
+            RawTLE(
                 norad_id=norad_id,
                 name=LOCKED_OBJECTS[norad_id]["name"],
                 tle_line1=line1,
@@ -185,37 +199,34 @@ def parse_tle_text(raw_text: str, fetched_at: datetime) -> list[TrackedObject]:
 # Cache read/write
 # ---------------------------------------------------------------------------
 
-def write_cache(objects: list[TrackedObject], cache_path: Path = CACHE_PATH) -> None:
+def write_cache(objects: list[RawTLE], cache_path: Path = CACHE_PATH) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     payload = [obj.to_dict() for obj in objects]
     cache_path.write_text(json.dumps(payload, indent=2))
     logger.info("Wrote %d objects to cache at %s", len(payload), cache_path)
 
 
-def read_cache(cache_path: Path = CACHE_PATH) -> list[TrackedObject]:
+def read_cache(cache_path: Path = CACHE_PATH) -> list[RawTLE]:
     if not cache_path.exists():
         raise FileNotFoundError(f"No cache file at {cache_path}")
     raw = json.loads(cache_path.read_text())
-    return [TrackedObject(**entry) for entry in raw]
+    return [RawTLE(**entry) for entry in raw]
 
 
 # ---------------------------------------------------------------------------
 # Public entry point — this is what A2/A3 and everyone downstream calls
 # ---------------------------------------------------------------------------
 
-def get_tracked_objects(force_refresh: bool = False) -> list[TrackedObject]:
+def get_raw_tles(force_refresh: bool = False) -> list[RawTLE]:
     """
-    Primary interface: returns the current list of TrackedObjects.
+    Primary interface: returns the current list of RawTLE records.
 
     Behavior:
-      1. Try a live fetch (unless force_refresh=False and a fresh-enough
-         cache already exists — kept simple here, always attempts live
-         fetch first since the poll interval is short and cheap).
+      1. Try a live fetch via httpx.
       2. On any failure (network, parse, empty body), fall back to the
          local cache.
       3. If the cache is also stale (> STALE_CUTOFF_DAYS old) or missing,
-         raise CelesTrakFetchError — caller decides whether that's fatal
-         or just a loud warning for the demo.
+         raise CelesTrakFetchError.
     """
     now = datetime.now(timezone.utc)
 
@@ -246,10 +257,14 @@ def get_tracked_objects(force_refresh: bool = False) -> list[TrackedObject]:
         return cached
 
 
+# Backward-compatibility alias
+get_tracked_objects = get_raw_tles
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    objs = get_tracked_objects()
-    print(f"\nRetrieved {len(objs)} tracked objects:\n")
+    objs = get_raw_tles()
+    print(f"\nRetrieved {len(objs)} raw TLE objects:\n")
     for o in objs:
         flag = " [STALE]" if o.is_stale else ""
         active = "active" if o.is_active else "INACTIVE"

@@ -64,22 +64,22 @@ This tracker mirrors `build-plan.md` exactly. It answers "what is the current st
 ## 4. Phase 1 — Four Parallel Workstreams
 
 ### Workstream A — Orbital Physics & Conjunction Detection
-**Owner:** Dev A
-**Current task:** —
-**Status:** Not started
-**Blocked by:** Phase 0 exit (schemas)
-**Waiting on:** Nothing beyond Phase 0
-**Next:** A1
-**Merge status:** Nothing merged
+**Owner:** Dev A / covered by Dev C
+**Current task:** A3 — Pairwise distance + threshold/hysteresis logic, `data/scenario.py` seeded scenario
+**Status:** A1 and A2 complete and cleaned up; proceeding to A3
+**Blocked by:** Nothing
+**Waiting on:** Nothing
+**Next:** A3
+**Merge status:** A1 and A2 merged to `main` with schema and httpx cleanup
 
 | Task ID | Task | Status | Notes |
 |---|---|---|---|
-| A1 | `data/celestrak.py` — fetch + local JSON cache + fallback-to-cache | `[ ]` | |
-| A2 | `agents/monitor_agent.py` — SGP4 propagation via `sgp4` | `[ ]` | Validate against a known satellite's expected position |
+| A1 | `data/celestrak.py` — fetch + local JSON cache + fallback-to-cache | `[x]` | Merged to `main`. Refactored to use `httpx` (async client + sync helper, removing undeclared `requests` dependency) and `RawTLE` dataclass to eliminate schema collision with `schemas/tracked_object.py`. Verified with `test_celestrak_offline.py`. |
+| A2 | `agents/monitor_agent.py` — SGP4 propagation via `sgp4` | `[x]` | Merged to `main`. `propagate()` constructs canonical Pydantic `TrackedObject` (`schemas/tracked_object.py`) with `timestamp_utc`, `position_km`, `velocity_kmps`. Verified against Vallado C++ ISS reference in `test_monitor_agent_validation.py`. |
 | A3 | Pairwise distance + threshold/hysteresis logic, `data/scenario.py` seeded scenario | `[ ]` | Must guarantee ≥1 sub-threshold close approach |
 
 #### Completion Criteria
-- [ ] Standalone script runs end-to-end offline (cached data only)
+- [x] Standalone script runs end-to-end offline (cached data only)
 - [ ] `detect_conjunctions()` returns schema-valid `ConjunctionAlert` objects
 - [ ] Scripted scenario reliably yields ≥1 alert below threshold
 
