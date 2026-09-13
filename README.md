@@ -29,9 +29,7 @@ Aegis replaces the manual, email-based satellite collision-avoidance process wit
 
 </div>
 
-<p align="center">
-  <img src="docs/screenshots/demogif.gif" alt="Aegis Demo" width="100%" />
-</p>
+![Aegis Demo](docs/screenshots/demogif.gif)
 
 ---
 
