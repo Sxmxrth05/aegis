@@ -158,3 +158,9 @@ Built by:
 | Samarth P Rao | Orchestrator, Schemas & Realtime Backbone | [@Atomiicradius](https://github.com/Atomiicradius) |
 | Samarth Sainath Naik | Agent Intelligence — Cost, Narration & Validation | [@Sxmxrth05](https://github.com/Sxmxrth05) |
 | Rahul P | Frontend Experience & WebSocket Client | [@rahul-ez](https://github.com/rahul-ez) |
+
+---
+
+## Demo Video
+
+[**Watch the high-quality Aegis Demo Video here!**](https://drive.google.com/drive/folders/1JcMrWcq07U5YDgG5eUyLvBj_2d6sj5Ue?usp=sharing)
