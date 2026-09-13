@@ -125,7 +125,7 @@ function propagateTle(
     const satrec = twoline2satrec(line1, line2);
     const result = propagate(satrec, epoch);
 
-    const position = result.position;
+    const position = result?.position;
     if (!position || typeof position === 'boolean') return null;
 
     // position is in km (ECI frame) — same conversion as eciToGeo.ts

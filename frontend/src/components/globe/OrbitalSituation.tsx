@@ -33,7 +33,6 @@ const RAAN_REF = (140.0 * Math.PI) / 180;
 
 const PERIOD_A = 5735; // ~95.6 min
 const PERIOD_B = 5730; // ~95.5 min
-const PERIOD_REF = 5820; // ~97 min
 
 // Conjunction time chosen at 35 min into simulation
 const CONJUNCTION_TIME_OFFSET = 35 * 60; // 2100 seconds
@@ -135,7 +134,7 @@ export function OrbitalSituation() {
     scene.backgroundColor = Cesium.Color.fromCssColorString('#070b12');
     globe.baseColor = Cesium.Color.fromCssColorString('#0b1322');
     globe.enableLighting = false;
-    globe.showAtmosphere = true;
+    globe.showGroundAtmosphere = true;
     globe.atmosphereLightIntensity = 1.1;
 
     // Dim sun & moon glare for mission control instrument look
@@ -154,6 +153,13 @@ export function OrbitalSituation() {
       duration: 0,
     });
   }, []);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && !viewer.isDestroyed()) {
+      onViewerLoaded(viewer);
+    }
+  }, [onViewerLoaded]);
 
   /* Track distance & clock updates */
   useEffect(() => {
@@ -269,7 +275,6 @@ export function OrbitalSituation() {
           fullscreenButton={false}
           selectionIndicator={false}
           creditContainer={undefined}
-          onReady={onViewerLoaded}
         >
           {/* Cesium Clock */}
           <Clock

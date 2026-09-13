@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import ReactGlobe, { type GlobeMethods } from 'react-globe.gl';
-import { ACESFilmicToneMapping, AdditiveBlending, AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group, Mesh, MeshPhongMaterial, Points, PointsMaterial, ShaderMaterial, SphereGeometry, Vector2 } from 'three';
+import { ACESFilmicToneMapping, AdditiveBlending, AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group, Mesh, MeshPhongMaterial, Object3D, Points, PointsMaterial, ShaderMaterial, SphereGeometry, Vector2 } from 'three';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 import earthBumpTexture from '../../assets/earth-bump.png';
@@ -198,7 +198,7 @@ function createStarfield(radius: number) {
   return starfield;
 }
 
-function disposeObject(object: Group | Mesh) {
+function disposeObject(object: Object3D) {
   object.traverse((child) => {
     if (child instanceof Mesh || child instanceof Points) {
       child.geometry.dispose();

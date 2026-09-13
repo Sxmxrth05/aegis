@@ -5,6 +5,9 @@ import cesium from 'vite-plugin-cesium';
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), cesium()],
+  worker: {
+    format: 'es',
+  },
   server: {
     port: 5173,
     proxy: {
@@ -24,6 +27,11 @@ export default defineConfig({
   // and the production build need bumping to esnext to load it.
   build: {
     target: 'esnext',
+    rollupOptions: {
+      output: {
+        format: 'es',
+      },
+    },
   },
   optimizeDeps: {
     esbuildOptions: {
