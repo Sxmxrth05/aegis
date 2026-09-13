@@ -6,9 +6,26 @@
 
 [![Built at Bit N Build](https://img.shields.io/badge/Bit%20N%20Build-Around%20the%20World%202026-3b82f6?style=flat-square)](#team)
 [![Built in 24 hours](https://img.shields.io/badge/built%20in-24%20hours-f59e0b?style=flat-square)]()
-[![Backend](https://img.shields.io/badge/backend-FastAPI-22c55e?style=flat-square)]()
-[![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-3b82f6?style=flat-square)]()
-[![License](https://img.shields.io/badge/license-MIT-9ca3b8?style=flat-square)]()
+
+
+<p>
+<img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+<img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+<img src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white" alt="Pydantic">
+<img src="https://img.shields.io/badge/WebSockets-3b82f6?style=for-the-badge&logo=socketdotio&logoColor=white" alt="WebSockets">
+<img src="https://img.shields.io/badge/Anthropic%20Claude-D4A27F?style=for-the-badge&logo=anthropic&logoColor=white" alt="Anthropic Claude">
+<br>
+<img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React">
+<img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
+<img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite">
+<img src="https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS">
+<img src="https://img.shields.io/badge/Zustand-433E38?style=for-the-badge&logo=react&logoColor=white" alt="Zustand">
+<br>
+<img src="https://img.shields.io/badge/SGP4-orbital%20propagation-1e3a5f?style=for-the-badge" alt="SGP4">
+<img src="https://img.shields.io/badge/react--globe.gl-3D%20globe-143120?style=for-the-badge" alt="react-globe.gl">
+<img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+<img src="https://img.shields.io/badge/CelesTrak-TLE%20data-3a2e0f?style=for-the-badge" alt="CelesTrak">
+</p>
 
 Aegis replaces the manual, email-based satellite collision-avoidance process with autonomous negotiation agents — one per satellite operator — that detect a real conjunction event, negotiate who maneuvers using real orbital physics and mission-priority data, and produce a fully auditable resolution.
 
@@ -87,7 +104,7 @@ flowchart TD
 **Frontend:** React + Vite · `react-globe.gl` · `satellite.js` · Tailwind CSS · Zustand
 **Data:** CelesTrak (TLE, no auth) · NOAA SWPC (space weather — stretch goal, not implemented)
 
-📄 Full technical detail in [`context/architecture.md`](context/architecture.md).
+ Full technical detail in [`context/architecture.md`](context/architecture.md).
 
 ---
 
@@ -142,6 +159,6 @@ Built by:
 | Samarth Sainath Naik | Agent Intelligence — Cost, Narration & Validation | [@Sxmxrth05](https://github.com/Sxmxrth05) |
 | Rahul P | Frontend Experience & WebSocket Client | [@rahul-ez](https://github.com/rahul-ez) |
 
-## 🎬 Demo Video
+## Demo Video
 
 [Link to demo video]
