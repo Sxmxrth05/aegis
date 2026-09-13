@@ -3,6 +3,8 @@ import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useNegotiationStore } from '../../store/useNegotiationStore';
+import type { BackgroundPoint } from './backgroundSatellites';
+import { fetchBackgroundSatellites } from './backgroundSatellites';
 import { Globe, type GlobeHandle, type GlobeMode } from './Globe';
 import { MOCK_TRACKED_OBJECTS } from './mockTrackedObjects';
 import type { ConjunctionAlert, ManeuverTrajectoryResult, TrackedObject } from './types';
@@ -81,6 +83,15 @@ export function GlobeStageProvider({ children }: { children: ReactNode }) {
   const [isMonitorChromeVisible, setMonitorChromeVisible] = useState(() => routeStage(location.pathname) === 'monitor');
   const liveTrackedObjects = useNegotiationStore((state) => state.trackedObjects);
   const activeConjunctionAlert = useNegotiationStore((state) => state.activeConjunctionAlert);
+
+  // Background satellite layer — cosmetic density cloud fetched once on mount.
+  // Stored here (not in Monitor.tsx) because GlobeStage owns the Globe instance;
+  // this also lets the background render on the Landing hero globe too.
+  // Falls back silently to a static set if the fetch fails (see backgroundSatellites.ts).
+  const [backgroundObjects, setBackgroundObjects] = useState<BackgroundPoint[]>([]);
+  useEffect(() => {
+    void fetchBackgroundSatellites().then(setBackgroundObjects);
+  }, []); // run once on mount — background objects don't need live updates
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -179,6 +190,7 @@ export function GlobeStageProvider({ children }: { children: ReactNode }) {
               mode={globeMode(stage.mode, Boolean(conjunctionAlert))}
               conjunctionAlert={conjunctionAlert}
               trajectoryResult={stage.trajectoryResult}
+              backgroundObjects={backgroundObjects}
             />
             {stage.mode === 'monitor-enter' && (
               <motion.div

@@ -12,6 +12,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      '/celestrak': {
+        target: 'https://celestrak.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/celestrak/, ''),
+      },
     },
   },
   // satellite.js ships a WASM-accelerated build that uses top-level await;

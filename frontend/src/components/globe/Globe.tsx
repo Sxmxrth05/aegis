@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 
 import earthBumpTexture from '../../assets/earth-bump.png';
 import earthNightTexture from '../../assets/earth-night.jpg';
+import type { BackgroundPoint } from './backgroundSatellites';
 import { DOCKED_OBJECT_GROUPS } from './dockedGroups';
 import { positionKmToGeo } from './eciToGeo';
 import { GlobeHud } from './GlobeHud';
@@ -25,6 +26,14 @@ type Props = {
   mode: GlobeMode;
   conjunctionAlert?: ConjunctionAlert;
   trajectoryResult?: ManeuverTrajectoryResult;
+  /**
+   * Decorative background satellite cloud — cosmetic density only.
+   * Rendered via a named Three.js Points mesh (`aegis-bg-satellites`) added
+   * directly to globe.scene(), completely outside react-globe.gl's pointsData
+   * pipeline. These objects are NEVER passed to detect_conjunctions(), never
+   * counted in the Tracking Register, and never rendered with HUD labels.
+   */
+  backgroundObjects?: BackgroundPoint[];
   className?: string;
 };
 
@@ -199,8 +208,68 @@ function disposeObject(object: Group | Mesh) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Background satellite mesh helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build (or rebuild) the named background-satellite Points mesh and add it to
+ * the scene. Returns the created Points object so the caller can track it for
+ * later disposal. Any previously existing mesh with the same name must be
+ * removed by the caller before calling this.
+ */
+function buildBackgroundMesh(
+  points: BackgroundPoint[],
+  globe: GlobeMethods,
+): Points {
+  const positions = new Float32Array(points.length * 3);
+  const radius = globe.getGlobeRadius();
+  const getCoords = (globe as unknown as { getCoords?: (lat: number, lng: number, alt?: number) => { x: number; y: number; z: number } }).getCoords;
+
+  points.forEach((pt, i) => {
+    let x: number, y: number, z: number;
+    if (typeof getCoords === 'function') {
+      const coords = getCoords.call(globe, pt.lat, pt.lng, pt.alt);
+      x = coords.x;
+      y = coords.y;
+      z = coords.z;
+    } else {
+      const phi = (90 - pt.lat) * (Math.PI / 180);
+      const theta = (90 - pt.lng) * (Math.PI / 180);
+      const r = radius * (1 + pt.alt);
+      const phiSin = Math.sin(phi);
+      x = r * phiSin * Math.cos(theta);
+      y = r * Math.cos(phi);
+      z = r * phiSin * Math.sin(theta);
+    }
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  });
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+
+  // Muted desaturated slate-blue — visually distinct from the active-blue
+  // monitored points (#60a5fa) and dim enough to stay below the bloom
+  // threshold. size 4.8 and opacity 0.68 keep them cleanly visible without
+  // competing with the monitored primary satellites.
+  const material = new PointsMaterial({
+    color: '#6d94c7',
+    size: 4.8,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0.68,
+    depthWrite: false,
+  });
+
+  const mesh = new Points(geometry, material);
+  mesh.name = 'aegis-bg-satellites';
+  return mesh;
+}
+
 export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
-  { trackedObjects, mode, conjunctionAlert, trajectoryResult, className = '' },
+  { trackedObjects, mode, conjunctionAlert, trajectoryResult, backgroundObjects, className = '' },
   ref,
 ) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
@@ -370,16 +439,43 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     return () => window.clearInterval(timer);
   }, [updateHud]);
 
+  // ---------------------------------------------------------------------------
+  // Background satellite layer — rebuild whenever backgroundObjects changes.
+  // Placed entirely in globe.scene() so it is outside react-globe.gl's
+  // pointsData / HUD / label pipeline.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const globe = globeRef.current;
+    if (!globe || !isGlobeReady) return;
+    const scene = globe.scene();
+
+    // Remove + dispose any previous background mesh.
+    const previous = scene.getObjectByName('aegis-bg-satellites') as Points | undefined;
+    if (previous) {
+      previous.removeFromParent();
+      disposeObject(previous);
+    }
+
+    // Only build a new mesh when we have data.
+    if (backgroundObjects && backgroundObjects.length > 0) {
+      const mesh = buildBackgroundMesh(backgroundObjects, globe);
+      scene.add(mesh);
+    }
+  }, [backgroundObjects, isGlobeReady]);
+
   useEffect(() => () => {
     const globe = globeRef.current;
     if (globe) {
       const scene = globe.scene();
       const atmosphere = scene.getObjectByName('aegis-fresnel-atmosphere') as Mesh | undefined;
       const starfield = scene.getObjectByName('aegis-starfield') as Group | undefined;
+      const bgSatellites = scene.getObjectByName('aegis-bg-satellites') as Points | undefined;
       atmosphere?.removeFromParent();
       starfield?.removeFromParent();
+      bgSatellites?.removeFromParent();
       if (atmosphere) disposeObject(atmosphere);
       if (starfield) disposeObject(starfield);
+      if (bgSatellites) disposeObject(bgSatellites);
       scene.getObjectByName('aegis-twilight-fill')?.removeFromParent();
       if (bloomRef.current) globe.postProcessingComposer().removePass(bloomRef.current);
     }
