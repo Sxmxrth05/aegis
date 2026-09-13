@@ -29,7 +29,7 @@ Aegis replaces the manual, email-based satellite collision-avoidance process wit
 
 </div>
 
-<video src="docs/screenshots/demovid.mp4" width="100%" controls autoplay loop muted playsinline></video>
+https://github.com/Sxmxrth05/aegis/raw/main/docs/screenshots/demovid.mp4
 
 ---
 
