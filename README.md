@@ -1,4 +1,4 @@
-# Aegis
+# Aegis🛰️
 
 **Autonomous multi-agent orbital collision de-confliction.**
 
@@ -43,9 +43,9 @@ As LEO gets more crowded, this doesn't scale.
 
 | Live Orbital View | Negotiation Console & Result |
 |---|---|
-| ![Monitor](docs/screenshots/monitor.png) | ![Negotiation](docs/screenshots/negotiation.png) |
+| ![Monitor](docs/screenshots/Monitor1.png) | ![Conjunction Resolution Desk](docs/screenshots/Conjunction_Resolution_Desk.jpeg) |
 
-![Result](docs/screenshots/result.png)
+![Resolution Archive](docs/screenshots/Resolution_archive.jpeg)
 
 ---
 
