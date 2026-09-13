@@ -50,12 +50,14 @@ When two satellites from different operators are on a collision course, resoluti
 
 ## Previews
 
-<div align="center">
-  <img src="docs/screenshots/Monitor2.jpeg" width="49%" alt="Live Orbital View" />
-  <img src="docs/screenshots/Conjunction_Resolution_Desk.jpeg" width="49%" alt="Negotiation Console & Result" />
-</div>
+| Live Orbital View | Negotiation Console & Result |
+|:---:|:---:|
+| <img src="docs/screenshots/Monitor2.jpeg" width="100%" alt="Live Orbital View" /> | <img src="docs/screenshots/Conjunction_Resolution_Desk.jpeg" width="100%" alt="Negotiation Console & Result" /> |
+
 <br />
+
 <div align="center">
+  <b>Resolution Archive</b><br/><br/>
   <img src="docs/screenshots/Resolution_archive.jpeg" width="100%" alt="Resolution Archive" />
 </div>
 
@@ -75,13 +77,10 @@ flowchart TD
 
     subgraph NEG["Negotiation"]
         direction LR
-        C["Operator Agent A"] <--> D["Operator Agent B"]
+        C["<b>Operator Agent A</b><br/>yield_score: deterministic<br/>justification: LLM narration"] <--> D["<b>Operator Agent B</b><br/>yield_score: deterministic<br/>justification: LLM narration"]
     end
 
-    C -.->|"yield_score: deterministic<br/>justification: LLM narration"| C
-    D -.->|"yield_score: deterministic<br/>justification: LLM narration"| D
-
-    NEG -- "WebSocket · /ws/negotiation/{id}" --> E
+    NEG -- "WebSocket ➜ /ws/negotiation/{id}" --> E
 
     subgraph VAL["Validation — no LLM"]
         E["Validation Agent<br/><i>6h re-propagation safety check</i>"]
@@ -101,9 +100,9 @@ flowchart TD
     class A,F,G store;
 ```
 
-**Backend:** FastAPI · WebSockets · `sgp4` · Pydantic · Anthropic API
-**Frontend:** React + Vite · `react-globe.gl` · `satellite.js` · Tailwind CSS · Zustand
-**Data:** CelesTrak (TLE, no auth) · NOAA SWPC (space weather — stretch goal, not implemented)
+- **Backend:** FastAPI, WebSockets, `sgp4`, Pydantic, Anthropic API
+- **Frontend:** React + Vite, `react-globe.gl`, `satellite.js`, Tailwind CSS, Zustand
+- **Data:** CelesTrak (TLE, no auth), NOAA SWPC (space weather — stretch goal, not implemented)
 
  Full technical detail in [`context/architecture.md`](context/architecture.md).
 
@@ -139,7 +138,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**. The backend runs entirely on cached/seeded data by default — no external API calls are required to see the full demo.
+Open **http://localhost:5173**. The backend runs entirely on cached/seeded data by default — no external API calls are required to see the full dem?
 
 ---
 
