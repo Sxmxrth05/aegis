@@ -27,6 +27,7 @@ export default defineConfig({
   // and the production build need bumping to esnext to load it.
   build: {
     target: 'esnext',
+    chunkSizeWarningLimit: 3500,
     rollupOptions: {
       output: {
         format: 'es',
