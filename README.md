@@ -60,40 +60,38 @@ When two satellites from different operators are on a collision course, resoluti
 
 ```mermaid
 flowchart TD
-    A[("🛰️ CelesTrak<br/>real TLE data")] --> B
-
-    subgraph DET["Deterministic — no LLM"]
-        B["Conjunction Monitor Agent<br/><i>SGP4 propagation</i>"]
-    end
-
-    B -- "WebSocket · /ws/monitor" --> C
-
-    subgraph NEG["Negotiation"]
-        direction LR
-        C["Operator Agent A"] <--> D["Operator Agent B"]
-    end
-
-    C -.->|"yield_score: deterministic<br/>justification: LLM narration"| C
-    D -.->|"yield_score: deterministic<br/>justification: LLM narration"| D
-
-    NEG -- "WebSocket · /ws/negotiation/{id}" --> E
-
-    subgraph VAL["Validation — no LLM"]
-        E["Validation Agent<br/><i>6h re-propagation safety check</i>"]
-    end
-
-    E --> F["React Frontend<br/>live 3D globe (react-globe.gl) + negotiation console"]
-    E --> G[("SQLite<br/>session history")]
-
+    CT[("🛰️ CelesTrak<br/>TLE data")] -->|"1 · fetch + cache"| MON
+ 
+    MON["Monitor Agent<br/><i>sgp4 propagation, deterministic</i>"] -->|"2-3 · ConjunctionAlert"| ORCH
+ 
+    ORCH{{"Orchestrator<br/><i>session state · sequencing · WebSocket broadcast</i>"}}
+ 
+    ORCH -->|"4 · creates NegotiationSession"| OA["Operator Agent A<br/><i>yield_score: cost_functions.py</i><br/><i>justification: Claude narration</i>"]
+    ORCH -->|"4 · creates NegotiationSession"| OB["Operator Agent B<br/><i>yield_score: cost_functions.py</i><br/><i>justification: Claude narration</i>"]
+ 
+    OA <-->|"proposals / counter-proposals"| OB
+    OA -->|"6 · NegotiationMessage"| ORCH
+    OB -->|"6 · NegotiationMessage"| ORCH
+ 
+    ORCH -->|"7 · on convergence or round cap"| VAL["Validation Agent<br/><i>6h re-propagation safety check</i>"]
+ 
+    VAL -->|"8 · rejects_secondary_risk → loop back with constraint"| OA
+    VAL -->|"8 · approved / approved_no_action"| ORCH
+ 
+    ORCH -->|"WebSocket broadcast"| FE["React Frontend<br/>3D globe (react-globe.gl) + negotiation console"]
+    ORCH -->|"9 · log session"| DB[("SQLite<br/>storage/db.py")]
+ 
     classDef det fill:#143120,stroke:#22c55e,color:#f2f4f8;
+    classDef orch fill:#161c2a,stroke:#2e3750,color:#f2f4f8,stroke-width:2px;
     classDef neg fill:#1e3a5f,stroke:#3b82f6,color:#f2f4f8;
     classDef val fill:#3a2e0f,stroke:#f59e0b,color:#f2f4f8;
     classDef store fill:#10151f,stroke:#232a3b,color:#f2f4f8;
-
-    class B det;
-    class C,D neg;
-    class E val;
-    class A,F,G store;
+ 
+    class MON det;
+    class ORCH orch;
+    class OA,OB neg;
+    class VAL val;
+    class CT,FE,DB store;
 ```
 
 **Backend:** FastAPI · WebSockets · `sgp4` · Pydantic · Anthropic API
@@ -114,9 +112,8 @@ We're upfront about this, since it matters for evaluating the demo honestly:
 | Conjunction detection | 🟢 **Real** — actual computed miss-distance/TCA on a scripted scenario |
 | Negotiation math (`yield_score`, Δv) | 🟢 **Real** — deterministic, auditable, traced to source in every UI display |
 | Trajectory simulation | 🟢 **Real** — Keplerian two-body + J2 oblateness, RK4 integration |
-| Mission priority / fuel data | 🟡 **Simulated** — no public API exposes real per-satellite operational data |
 | LLM negotiation narration | 🟢 **Real LLM calls**, with a deterministic template fallback if unavailable |
-| Session history persistence | 🟠 **Built, not yet live-wired** — `storage/db.py` has full save/query functions and passing tests, but the live negotiation flow doesn't call them yet; the History page falls back to bundled sample data until this lands |
+
 
 ---
 
